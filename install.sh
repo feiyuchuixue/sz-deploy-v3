@@ -29,7 +29,7 @@ install_service() {
     fi
   fi
   cd "$SERVICE_DIR"
-#   bash ./gas-base.sh
+  bash ./sz-1-enviroment.sh
 #   bash ./gas-service.sh
   cd "$CURRENT_DIR"
 #  sudo rm -rf "$SERVICE_DIR"
