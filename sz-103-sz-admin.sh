@@ -39,7 +39,7 @@ service_init() {
   mkdir -p "$COMPOSE_DIR"/conf.d
   cp ./"$SERVICE_NAME"/docker-compose.yml "$COMPOSE_DIR"
   cp ./"$SERVICE_NAME"/upgrade.sh "$COMPOSE_DIR"
-
+  chmod +x "$COMPOSE_DIR"/upgrade.sh
   if [[ "${USE_BLUE_GREEN_DEPLOY:-false}" == "true" ]]; then
     log "INFO" "[$SERVICE_NAME] 使用蓝绿部署模式"
     cp ./"$SERVICE_NAME"/conf.d/default-blue-green.conf "$COMPOSE_DIR"/conf.d

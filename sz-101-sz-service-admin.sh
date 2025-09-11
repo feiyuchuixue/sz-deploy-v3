@@ -105,6 +105,8 @@ service_init() {
     cp ./"$SERVICE_NAME"/blue-green/docker-compose.yml.template "$COMPOSE_DIR"
     cp ./"$SERVICE_NAME"/blue-green/gen-conf.sh "$COMPOSE_DIR"
     cp ./"$SERVICE_NAME"/blue-green/nginx/nginx.conf "$COMPOSE_DIR"/nginx
+    chmod +x "$COMPOSE_DIR"/gen-conf.sh
+    chmod +x "$COMPOSE_DIR"/deploy.sh
 
     cd "${COMPOSE_DIR}"
     pwd
@@ -116,6 +118,7 @@ service_init() {
     log "INFO" "[$SERVICE_NAME] 使用普通部署模式"
     cp ./"$SERVICE_NAME"/docker-compose.yml "$COMPOSE_DIR"
     cp ./"$SERVICE_NAME"/upgrade.sh "$COMPOSE_DIR"
+    chmod +x "$COMPOSE_DIR"/upgrade.sh
     cd "$COMPOSE_DIR" && docker compose up -d
   fi
   log "INFO" "[$SERVICE_NAME] 初始化完成"
