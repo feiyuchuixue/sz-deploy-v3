@@ -17,9 +17,9 @@ error_handler() {
 # $LINENO 表示当前行号，$BASH_COMMAND 表示正在执行的命令
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
-# 载入 .env 文件
-if [ -f .env ]; then
-  export $(grep -v '^#' .env | xargs)
+# 载入上一级目录的 .env 文件
+if [ -f ../.env ]; then
+  export $(grep -v '^#' ../.env | xargs)
 fi
 
 COMPOSE_DIR=/home/docker-compose/redis
