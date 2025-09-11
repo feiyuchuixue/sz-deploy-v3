@@ -32,13 +32,13 @@ log() {
 }
 
 main() {
-  log "INFO" "开始安装基础服务"
+  log "INFO" "**********开始安装基础服务**********"
   bash ./sz-1-env.sh
   bash ./sz-2-docker.sh
   bash ./sz-3-redis.sh
   bash ./sz-4-mysql.sh
   bash ./sz-5-minio.sh
-  log "INFO" "所有基础服务安装完成"
+  log "INFO" "**********所有基础服务安装完成**********"
 }
 
 # 调用主流程

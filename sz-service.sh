@@ -32,11 +32,11 @@ log() {
 }
 
 main() {
-  log "INFO" "开始安装应用服务"
+  log "INFO" "**********开始安装应用服务**********"
   bash ./sz-101-sz-service-admin.sh
   bash ./sz-102-sz-service-websocket.sh
   bash ./sz-103-sz-admin.sh
-  log "INFO" "所有应用服务安装完成"
+  log "INFO" "**********所有应用服务安装完成**********"
 }
 
 # 调用主流程
