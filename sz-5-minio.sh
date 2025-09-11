@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# 设置严格模式
 set -euo pipefail
 
 # 定义错误处理函数：打印错误信息、行号和命令
@@ -22,33 +23,25 @@ if [ -f .env ]; then
   export $(grep -v '^#' .env | xargs)
 fi
 
+COMPOSE_DIR=/home/docker-compose/minio
 CURRENT_DIR=$(pwd)
 
 log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$type] $msg"; }
 
+minio_init() {
+  log "INFO" "Minio 初始化"
+  mkdir -p "$COMPOSE_DIR"
+  cp ./minio/docker-compose.yml "$COMPOSE_DIR"
+  cp ./minio/upgrade.sh "$COMPOSE_DIR"
 
-init() {
-  log "INFO" "更新环境"
-  sudo dnf upgrade -y
+  cd "$COMPOSE_DIR" && docker compose up -d
+  log "INFO" "Minio 初始化完成"
+  cd "$CURRENT_DIR"   # 切换回原始路径
 
-  log "INFO" "关闭防火墙"
-  sudo systemctl stop firewalld
-  sudo systemctl disable firewalld
-  sudo systemctl status firewalld --no-pager || true
-
-  log "INFO" "同步时间开始"
-  # 时区检查与同步设置
-  sudo dnf install -y chrony
-  sudo systemctl enable --now chronyd
-  sudo chronyc sources -v
-  sudo chronyc makestep
-  date
-  timedatectl
-  log "INFO" "同步时间结束"
 }
 
 main() {
-  init
+  minio_init
 }
 
 main "$@"

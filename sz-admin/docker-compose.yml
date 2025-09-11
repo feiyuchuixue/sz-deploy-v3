@@ -1,0 +1,16 @@
+services:
+  sz-admin:
+    image: registry.cn-beijing.aliyuncs.com/sz-dev/sz-admin:latest
+    container_name: sz-admin
+    restart: always
+    ports:
+      - "9800:9800"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./conf.d:/etc/nginx/conf.d
+    networks:
+      - sz-network
+networks:
+  sz-network:
+    external: true

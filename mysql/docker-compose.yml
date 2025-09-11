@@ -1,0 +1,19 @@
+services:
+  redis:
+    image: registry.cn-beijing.aliyuncs.com/sz-dev/mysql:latest
+    container_name: mysql8
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: Sz2025@123456
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./data:/var/lib/mysql
+      - ./my.cnf:/etc/mysql/conf.d/my.cnf  # 可选自定义配置
+    networks:
+      - sz-network
+
+networks:
+  sz-network:
+    external: true

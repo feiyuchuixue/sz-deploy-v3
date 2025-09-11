@@ -1,0 +1,17 @@
+services:
+  sz-service-websocket:
+    image: registry.cn-beijing.aliyuncs.com/sz-dev/sz-service-websocket:latest
+    container_name: sz-service-websocket
+    restart: always
+    ports:
+      - "9993:9993"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+    volumes:
+      - ./logs:/logs
+      - /home/docker-compose/sz-service-admin/config:/config
+    networks:
+      - sz-network
+networks:
+  sz-network:
+    external: true

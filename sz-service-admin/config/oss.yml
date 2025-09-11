@@ -1,0 +1,13 @@
+# 此文件需结合minio配置进行修改或调整
+oss:
+  # 支持S3协议的厂商
+  provider: MINIO
+  endpoint: minio:9000
+  accessKey: OM7unN89MF3RUsD5RILv
+  secretKey: keSYozaRWqqYVoI1vp4R1Rs0ImdcAlOHVRepRxsL
+  bucketName: test
+  # 资源文件访问域名
+  domain: http://192.168.124.57:9000
+  # 命名方式: UUID、ORIGINAL原文件名偏好，冲突会补充时间
+  naming: original
+  scheme: https

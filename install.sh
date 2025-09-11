@@ -7,7 +7,7 @@ if [ -f .env ]; then
   export $(grep -v '^#' .env | xargs)
 fi
 
-SERVICE_DIR="sz-deploy"
+SERVICE_DIR=sz-deploy
 CURRENT_DIR=$(pwd)
 
 log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$type] $msg"; }
@@ -28,9 +28,10 @@ install_service() {
       git clone "https://$GIT_REPO_URL" "$SERVICE_DIR"
     fi
   fi
+
   cd "$SERVICE_DIR"
-  bash ./sz-1-enviroment.sh
-#   bash ./gas-service.sh
+  bash ./sz-base.sh
+  bash ./sz-service.sh
   cd "$CURRENT_DIR"
 #  sudo rm -rf "$SERVICE_DIR"
 #  log "INFO" "清理完成"

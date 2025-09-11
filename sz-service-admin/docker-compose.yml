@@ -1,0 +1,17 @@
+services:
+  sz-service-admin:
+    image: registry.cn-beijing.aliyuncs.com/sz-dev/sz-service-admin:latest
+    container_name: sz-service-admin
+    restart: always
+    ports:
+      - "9991:9991"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+    volumes:
+      - ./logs:/logs
+      - ./config:/config
+    networks:
+      - sz-network
+networks:
+  sz-network:
+    external: true

@@ -1,0 +1,21 @@
+services:
+  redis:
+    image: registry.cn-beijing.aliyuncs.com/sz-dev/minio:latest
+    container_name: minio
+    restart: always
+    ports:
+      - "9000:9000"   # S3 API端口
+      - "9001:9001"   # 控制台端口
+    environment:
+      MINIO_ROOT_USER: szadmin       # 管理员用户名
+      MINIO_ROOT_PASSWORD: Sz2025@123456   # 管理员密码
+    volumes:
+      - ./data:/data        # 数据卷
+      - ./config:/root/.minio # 配置文件
+    command: server /data --console-address ":9001"
+    networks:
+      - sz-network
+
+networks:
+  sz-network:
+    external: true
