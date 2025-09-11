@@ -28,7 +28,7 @@ log() {
 
 main() {
   log "INFO" "开始安装基础服务"
-  bash ./sz-1-environment.sh
+  bash ./sz-1-env.sh
   bash ./sz-2-docker.sh
   bash ./sz-3-redis.sh
   bash ./sz-4-mysql.sh
