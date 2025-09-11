@@ -302,3 +302,6 @@ log "流量已完全切到: $NEW_SLOT"
 remove_slot "$ACTIVE_SLOT"
 set_active_slot "$NEW_SLOT"
 log "✅ 部署完成，新 active: $NEW_SLOT"
+
+log "清理悬虚镜像"
+sudo docker image prune -f
