@@ -99,7 +99,7 @@ service_init() {
   cp ./"$SERVICE_NAME"/config/* "$COMPOSE_DIR"/config/prod
   if [[ "${USE_BLUE_GREEN_DEPLOY:-false}" == "true" ]]; then
     log "INFO" "[$SERVICE_NAME] 使用蓝绿部署模式"
-    pwd
+    cd "${COMPOSE_DIR}"
     mkdir -p "$COMPOSE_DIR"/nginx
     cp ./"$SERVICE_NAME"/blue-green/.env "$COMPOSE_DIR"
     cp ./"$SERVICE_NAME"/blue-green/deploy.sh "$COMPOSE_DIR"
