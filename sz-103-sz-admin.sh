@@ -36,10 +36,10 @@ service_init() {
   cp ./"$SERVICE_NAME"/upgrade.sh "$COMPOSE_DIR"
 
   if [[ "${USE_BLUE_GREEN_DEPLOY:-false}" == "true" ]]; then
-    log "INFO" "使用蓝绿部署模式"
+    log "INFO" "[$SERVICE_NAME] 使用蓝绿部署模式"
     cp ./"$SERVICE_NAME"/conf.d/default-blue-green.conf "$COMPOSE_DIR"/conf.d
   else
-    log "INFO" "使用普通部署模式"
+    log "INFO" "[$SERVICE_NAME] 使用普通部署模式"
     cp ./"$SERVICE_NAME"/conf.d/default.conf "$COMPOSE_DIR"/conf.d
   fi
 

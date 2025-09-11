@@ -98,7 +98,7 @@ service_init() {
   mkdir -p "$COMPOSE_DIR"/config/prod
   cp ./"$SERVICE_NAME"/config/* "$COMPOSE_DIR"/config/prod
   if [[ "${USE_BLUE_GREEN_DEPLOY:-false}" == "true" ]]; then
-    log "INFO" "使用蓝绿部署模式"
+    log "INFO" "[$SERVICE_NAME] 使用蓝绿部署模式"
     pwd
     mkdir -p "$COMPOSE_DIR"/nginx
     cp ./"$SERVICE_NAME"/blue-green/.env "$COMPOSE_DIR"
@@ -107,12 +107,12 @@ service_init() {
     cp ./"$SERVICE_NAME"/blue-green/gen-conf.sh "$COMPOSE_DIR"
     cp ./"$SERVICE_NAME"/blue-green/nginx/nginx.conf "$COMPOSE_DIR"/nginx
 
-    log "INFO" "生成蓝绿部署配置"
+    log "INFO" "[$SERVICE_NAME] 生成蓝绿部署配置"
     bash ./gen-conf.sh
-    log "INFO" "进行蓝绿部署..."
+    log "INFO" "[$SERVICE_NAME] 进行蓝绿部署..."
     bash ./deploy.sh
   else
-    log "INFO" "使用普通部署模式"
+    log "INFO" "[$SERVICE_NAME] 使用普通部署模式"
     cp ./"$SERVICE_NAME"/docker-compose.yml "$COMPOSE_DIR"
     cp ./"$SERVICE_NAME"/upgrade.sh "$COMPOSE_DIR"
     cd "$COMPOSE_DIR" && docker compose up -d
