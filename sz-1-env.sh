@@ -28,7 +28,7 @@ log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$
 
 
 init() {
-  log "INFO" "更新环境"
+  log "INFO" "==========更新环境=========="
   sudo dnf upgrade -y
 
   log "INFO" "关闭防火墙"

@@ -48,7 +48,7 @@ log() {
 # 循环检查MySQL连接
 check_mysql_connection() {
     local retry=0
-    log "INFO" "开始检查 MySQL 连接（最多重试 $MAX_RETRIES 次，间隔 $RETRY_INTERVAL 秒）..."
+    log "INFO" "==========开始检查 MySQL 连接（最多重试 $MAX_RETRIES 次，间隔 $RETRY_INTERVAL 秒）...=========="
 
     while [ $retry -lt $MAX_RETRIES ]; do
         # 尝试连接并执行简单查询
@@ -87,7 +87,7 @@ EOF
 }
 
 service_init() {
-  log "INFO" "[$SERVICE_NAME] 初始化"
+  log "INFO" "==========[$SERVICE_NAME] 初始化=========="
 
   # 创建内置数据库
   # 检查容器是否在运行

@@ -28,7 +28,7 @@ CURRENT_DIR=$(pwd)
 log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$type] $msg"; }
 
 mysql_init() {
-  log "INFO" "MySQL 初始化"
+  log "INFO" "==========MySQL 初始化=========="
   mkdir -p "${COMPOSE_DIR}"
   cp ./mysql/my.cnf "${COMPOSE_DIR}"
   cp ./mysql/docker-compose.yml "${COMPOSE_DIR}"

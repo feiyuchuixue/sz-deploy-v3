@@ -29,7 +29,7 @@ log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$
 install_docker() {
   # 如果未安装 Docker，则安装
   if ! command -v docker &> /dev/null; then
-    log "INFO" "开始安装 Docker"
+    log "INFO" "==========开始安装 Docker=========="
     sudo dnf remove docker \
                       docker-client \
                       docker-client-latest \

@@ -28,7 +28,7 @@ CURRENT_DIR=$(pwd)
 log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$type] $msg"; }
 
 redis_init() {
-  log "INFO" "Redis 初始化"
+  log "INFO" "==========Redis 初始化=========="
   mkdir -p "${COMPOSE_DIR}"
   cp ./redis/docker-compose.yml "${COMPOSE_DIR}"
   cp ./redis/upgrade.sh "${COMPOSE_DIR}"

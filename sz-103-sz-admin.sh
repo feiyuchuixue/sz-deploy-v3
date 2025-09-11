@@ -35,7 +35,7 @@ log() {
 }
 
 service_init() {
-  log "INFO" "[$SERVICE_NAME] 初始化"
+  log "INFO" "==========[$SERVICE_NAME] 初始化=========="
   mkdir -p "$COMPOSE_DIR"/conf.d
   cp ./"$SERVICE_NAME"/docker-compose.yml "$COMPOSE_DIR"
   cp ./"$SERVICE_NAME"/upgrade.sh "$COMPOSE_DIR"

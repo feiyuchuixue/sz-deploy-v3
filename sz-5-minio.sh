@@ -29,7 +29,7 @@ CURRENT_DIR=$(pwd)
 log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$type] $msg"; }
 
 minio_init() {
-  log "INFO" "Minio 初始化"
+  log "INFO" "==========Minio 初始化=========="
   mkdir -p "$COMPOSE_DIR"
   cp ./minio/docker-compose.yml "$COMPOSE_DIR"
   cp ./minio/upgrade.sh "$COMPOSE_DIR"
