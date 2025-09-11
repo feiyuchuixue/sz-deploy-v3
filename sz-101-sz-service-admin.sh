@@ -99,7 +99,6 @@ service_init() {
   cp ./"$SERVICE_NAME"/config/* "$COMPOSE_DIR"/config/prod
   if [[ "${USE_BLUE_GREEN_DEPLOY:-false}" == "true" ]]; then
     log "INFO" "[$SERVICE_NAME] 使用蓝绿部署模式"
-    cd "${COMPOSE_DIR}"
     mkdir -p "$COMPOSE_DIR"/nginx
     cp ./"$SERVICE_NAME"/blue-green/.env "$COMPOSE_DIR"
     cp ./"$SERVICE_NAME"/blue-green/deploy.sh "$COMPOSE_DIR"
@@ -107,6 +106,8 @@ service_init() {
     cp ./"$SERVICE_NAME"/blue-green/gen-conf.sh "$COMPOSE_DIR"
     cp ./"$SERVICE_NAME"/blue-green/nginx/nginx.conf "$COMPOSE_DIR"/nginx
 
+    cd "${COMPOSE_DIR}"
+    pwd
     log "INFO" "[$SERVICE_NAME] 生成蓝绿部署配置"
     bash ./gen-conf.sh
     log "INFO" "[$SERVICE_NAME] 进行蓝绿部署..."
