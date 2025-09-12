@@ -1,5 +1,5 @@
 services:
-  redis:
+  minio:
     image: registry.cn-beijing.aliyuncs.com/sz-dev/minio:latest
     container_name: minio
     restart: always

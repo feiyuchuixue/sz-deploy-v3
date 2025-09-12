@@ -1,5 +1,5 @@
 services:
-  redis:
+  mysql8:
     image: registry.cn-beijing.aliyuncs.com/sz-dev/mysql:latest
     container_name: mysql8
     restart: always
