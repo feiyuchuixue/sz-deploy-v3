@@ -1,8 +1,6 @@
 #!/bin/bash
 
-# 设置严格模式
 set -euo pipefail
-#set -e
 
 # 定义错误处理函数：打印错误信息、行号和命令
 error_handler() {
@@ -24,21 +22,24 @@ if [ -f ../.env ]; then
   export $(grep -v '^#' ../.env | xargs)
 fi
 
-# 日志函数
-log() {
-  local type="$1"
-  local msg="$2"
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$type] $msg"
+COMPOSE_DIR=/home/docker-compose/nginx-proxy-manager-zh
+CURRENT_DIR=$(pwd)
+
+log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$type] $msg"; }
+
+npm_init() {
+  log "INFO" "==========nginx-proxy-manager-zh 初始化=========="
+  mkdir -p "${COMPOSE_DIR}"
+  cp ./nginx-proxy-manager-zh/docker-compose.yml "${COMPOSE_DIR}"
+  cp ./nginx-proxy-manager-zh/upgrade.sh "${COMPOSE_DIR}"
+
+  cd "${COMPOSE_DIR}" && docker compose up -d
+  log "INFO" "nginx-proxy-manager-zh 初始化完成"
+  cd "$CURRENT_DIR"
 }
 
 main() {
-  log "INFO" "**********开始安装应用服务**********"
-  bash ./sz-101-sz-service-admin.sh
-  bash ./sz-102-sz-service-websocket.sh
-  bash ./sz-103-sz-admin.sh
-  bash ./sz-104-nginx-proxy-manager.sh
-  log "INFO" "**********所有应用服务安装完成**********"
+  npm_init
 }
 
-# 调用主流程
 main "$@"

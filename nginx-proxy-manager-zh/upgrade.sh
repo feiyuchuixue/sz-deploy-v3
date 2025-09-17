@@ -1,0 +1,13 @@
+#!/bin/bash
+
+echo "==================== 停止旧应用容器 ===================="
+sudo docker compose down || true
+
+echo "==================== 重新拉取镜像并启动应用容器 ===================="
+sudo docker compose pull
+
+echo "==================== 启动应用容器 ======================"
+sudo docker compose up -d
+
+echo "==================== 清理悬虚镜像 ======================"
+sudo docker image prune -f
