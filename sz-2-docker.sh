@@ -60,7 +60,6 @@ install_docker() {
      # 打印版本
      docker-compose --version
      log "INFO" "Docker Compose 安装完成"
-    return
   else
      log "INFO" "Docker Compose 已安装，版本: $(docker-compose --version)"
   fi
