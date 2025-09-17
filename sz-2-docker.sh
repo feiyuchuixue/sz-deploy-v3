@@ -50,24 +50,17 @@ install_docker() {
   sudo systemctl status docker --no-pager || true
   log "INFO" "Docker 安装完成"
 
-  # 检查docker-compose是否已安装
+  # 验证Docker Compose 是否存在，如果不存在进行安装
   if ! command -v docker-compose &> /dev/null; then
      log "INFO" "开始安装 Docker Compose"
-     pwd
-     # 优先使用本地 static/docker-compose-linux-x86_64
-     if [ -f "$CURRENT_DIR/static/docker-compose-linux-x86_64" ]; then
-        log "INFO" "发现本地 static/docker-compose-linux-x86_64 文件，直接安装"
-        sudo cp "$CURRENT_DIR/static/docker-compose-linux-x86_64" /usr/local/bin/docker-compose
-        sudo chmod +x /usr/local/bin/docker-compose
-     else
-        log "INFO" "未发现本地 docker-compose 文件，尝试下载"
-        curl -L "$DOCKER_COMPOSE_URL" -o docker-compose
-        sudo mv docker-compose /usr/local/bin/docker-compose
-        sudo chmod +x /usr/local/bin/docker-compose
-     fi
+     # 安装docker compose
+     curl -L "$DOCKER_COMPOSE_URL" -o docker-compose
+     sudo mv docker-compose /usr/local/bin/docker-compose
+     sudo chmod +x /usr/local/bin/docker-compose
+     # 打印版本
      docker-compose --version
      log "INFO" "Docker Compose 安装完成"
-     return
+    return
   else
      log "INFO" "Docker Compose 已安装，版本: $(docker-compose --version)"
   fi
