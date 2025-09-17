@@ -12,6 +12,26 @@ CURRENT_DIR=$(pwd)
 
 log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$type] $msg"; }
 
+# 自动选择仓库地址
+case "${GIT_REPO_PLATFORM:-github}" in
+  github)
+    REPO_URL="${GIT_REPO_URL_GITHUB}"
+    ;;
+  gitee)
+    REPO_URL="${GIT_REPO_URL_GITEE}"
+    ;;
+  gitlab)
+    REPO_URL="${GIT_REPO_URL_GITLAB}"
+    ;;
+  gitea)
+    REPO_URL="${GIT_REPO_URL_GITEA}"
+    ;;
+  *)
+    echo "未识别的 GIT_REPO_PLATFORM: ${GIT_REPO_PLATFORM}"
+    exit 1
+    ;;
+esac
+
 install_software() {
   log "INFO" "安装必要的软件"
   if ! command -v git &> /dev/null; then
@@ -23,9 +43,9 @@ install_software() {
 install_service() {
   if [ ! -d "$SERVICE_DIR" ]; then
     if [[ -n "${GIT_USERNAME:-}" && -n "${GIT_PASSWORD:-}" ]]; then
-      git clone "https://$GIT_USERNAME:$GIT_PASSWORD@$GIT_REPO_URL" "$SERVICE_DIR"
+      git clone "https://${GIT_USERNAME}:${GIT_PASSWORD}@${REPO_URL}" "$SERVICE_DIR"
     else
-      git clone "https://$GIT_REPO_URL" "$SERVICE_DIR"
+      git clone "https://${REPO_URL}" "$SERVICE_DIR"
     fi
   fi
 
