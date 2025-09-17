@@ -29,7 +29,13 @@ log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$
 
 init() {
   log "INFO" "==========更新环境=========="
-  sudo dnf upgrade -y
+
+  if [[ "${FAST_DEPLOY:-false}" != "true" ]]; then
+    log "INFO" "==========更新环境=========="
+    sudo dnf upgrade -y
+  else
+    log "INFO" "快速部署模式，跳过系统升级"
+  fi
 
   log "INFO" "关闭防火墙"
   sudo systemctl stop firewalld
