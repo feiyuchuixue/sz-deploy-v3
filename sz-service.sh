@@ -38,10 +38,17 @@ main() {
   bash ./sz-103-sz-admin.sh
   bash ./sz-104-nginx-proxy-manager.sh
   log "INFO" "**********所有应用服务安装完成**********"
-  log "INFO" "请访问 http://<服务器IP>:81 进行 Nginx Proxy Manager 的初始配置，默认 账号/密码 为 admin@example.com / changeme"
-  log "INFO" "请访问 http://<服务器IP>:9000 进行 Minio 的初始配置，默认 账号/密码 为 szadmin / Sz2025@123456"
-  log "INFO" "Docker Network [$DOCKER_NETWORK_NAME] 应用服务信息"
+  log "INFO" "**************************************"
+  log "INFO" "Docker Network [$DOCKER_NETWORK_NAME] 应用服务信息："
   docker network inspect "$DOCKER_NETWORK_NAME"
+  echo "============================================================"
+  echo "Nginx Proxy Manager 初始配置地址: http://<服务器IP>:81"
+  echo "  默认账号/密码: admin@example.com / changeme"
+  echo "------------------------------------------------------------"
+  echo "Minio 初始配置地址: http://<服务器IP>:9000"
+  echo "  默认账号/密码: szadmin / Sz2025@123456"
+  echo "============================================================"
+
 }
 
 # 调用主流程
