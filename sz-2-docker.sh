@@ -30,18 +30,22 @@ install_docker() {
   # 如果未安装 Docker，则安装
   if ! command -v docker &> /dev/null; then
     log "INFO" "==========开始安装 Docker=========="
-    sudo dnf remove docker \
-                      docker-client \
-                      docker-client-latest \
-                      docker-common \
-                      docker-latest \
-                      docker-latest-logrotate \
-                      docker-logrotate \
-                      docker-engine
+    sudo $PKG_MGR remove docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine
 
-    sudo dnf -y install dnf-plugins-core
-    sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-    sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    if [ "$PKG_MGR" = "yum" ] || [ "$PKG_MGR" = "dnf" ]; then
+      sudo $PKG_MGR -y install dnf-plugins-core
+      sudo $PKG_MGR config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+      sudo $PKG_MGR install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    elif [ "$PKG_MGR" = "apt" ]; then
+      sudo $PKG_MGR update
+      sudo $PKG_MGR install -y ca-certificates curl gnupg lsb-release
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+      echo \
+        "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
+        $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+      sudo $PKG_MGR update
+      sudo $PKG_MGR install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    fi
   fi
   # 启动服务
   sudo systemctl enable --now docker
