@@ -35,7 +35,7 @@ esac
 install_software() {
   log "INFO" "安装必要的软件"
   if ! command -v git &> /dev/null; then
-    sudo dnf install -y git
+    sudo $PKG_MGR install -y git
   fi
   log "INFO" "必要的软件安装完成"
 }
@@ -43,9 +43,9 @@ install_software() {
 install_service() {
   if [ ! -d "$SERVICE_DIR" ]; then
     if [[ -n "${GIT_USERNAME:-}" && -n "${GIT_PASSWORD:-}" ]]; then
-      git clone "https://${GIT_USERNAME}:${GIT_PASSWORD}@${REPO_URL}" "$SERVICE_DIR"
+      git clone --branch "${GIT_BRANCH:-main}" "https://${GIT_USERNAME}:${GIT_PASSWORD}@${REPO_URL}" "$SERVICE_DIR"
     else
-      git clone "https://${REPO_URL}" "$SERVICE_DIR"
+      git clone --branch "${GIT_BRANCH:-main}" "https://${REPO_URL}" "$SERVICE_DIR"
     fi
   fi
 

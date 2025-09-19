@@ -32,7 +32,7 @@ init() {
 
   if [[ "${FAST_DEPLOY:-false}" != "true" ]]; then
     log "INFO" "==========更新环境=========="
-    sudo dnf upgrade -y
+    sudo $PKG_MGR upgrade -y
   else
     log "INFO" "快速部署模式，跳过系统升级"
   fi
@@ -44,7 +44,7 @@ init() {
 
   log "INFO" "同步时间开始"
   # 时区检查与同步设置
-  sudo dnf install -y chrony
+  sudo $PKG_MGR install -y chrony
   sudo systemctl enable --now chronyd
   sudo chronyc sources -v
   sudo chronyc makestep
