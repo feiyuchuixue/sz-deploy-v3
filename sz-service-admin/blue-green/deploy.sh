@@ -20,6 +20,15 @@ for v in "${REQUIRED_VARS[@]}"; do
   fi
 done
 
+# 确保 upstream 配置文件存在，并有 dummy 占位，避免 Nginx 首次启动时报错
+if [ ! -f "$UPSTREAM_FILE" ]; then
+  mkdir -p "$(dirname "$UPSTREAM_FILE")"
+  {
+    echo "# initially generated on $(date)"
+    echo "server 127.0.0.1:65535 down;"
+  } > "$UPSTREAM_FILE"
+fi
+
 HEALTH_RETRY="${HEALTH_RETRY:-60}"
 HEALTH_INTERVAL="${HEALTH_INTERVAL:-2}"
 SPRINGBOOT_LOG_TAIL="${SPRINGBOOT_LOG_TAIL:-100}"
@@ -29,6 +38,11 @@ NGINX_GRACE_PERIOD="${NGINX_GRACE_PERIOD:-5}" # 切换后等待秒数
 
 LOCK_FILE="${LOCK_FILE:-deploy.lock}"
 exec 9>"$LOCK_FILE"
+cleanup() {
+  rm -f "$LOCK_FILE"
+}
+trap cleanup EXIT
+
 if ! flock -n 9; then
   err "已有部署在进行，取消本次部署"
   exit 1
@@ -42,13 +56,15 @@ health_check() {
     log "$cname 健康状态: $st ($i/$HEALTH_RETRY)"
     if [[ "$st" == "starting" ]] && [[ "$PRINT_SPRINGBOOT_LOG" == "true" ]]; then
       log "SpringBoot 容器 $cname 日志（最近${SPRINGBOOT_LOG_TAIL_HEALTH}行）如下："
-      docker logs --tail "$SPRINGBOOT_LOG_TAIL_HEALTH" "$cname"
+      docker logs --tail "$SPRINGBOOT_LOG_TAIL_HEALTH" "$cname" || true
     fi
     if [ "$st" = "healthy" ]; then
       return 0
     fi
     sleep "$HEALTH_INTERVAL"
   done
+  log "$cname 健康检查超时未通过，拉取日志："
+  docker logs --tail 30 "$cname" || true
   return 1
 }
 
@@ -71,14 +87,21 @@ wait_nginx_healthy() {
     fi
     sleep "$HEALTH_INTERVAL"
   done
+  log "Nginx 健康检查超时未通过，拉取nginx容器日志："
+  docker logs --tail 30 "$cname" || true
   return 1
 }
 
 ensure_network() {
+  log "进入ensure_network函数..."
   if ! docker network ls | grep -q "$NETWORK_NAME"; then
-    log "创建网络: $NETWORK_NAME"
+    log "网络$NETWORK_NAME不存在，创建中"
     docker network create "$NETWORK_NAME"
+    log "网络$NETWORK_NAME 创建完成"
+  else
+    log "网络$NETWORK_NAME 已存在"
   fi
+  log "ensure_network执行结束"
 }
 
 get_active_slot() {
@@ -109,17 +132,22 @@ start_slot() {
   log "准备启动容器: $cname"
   docker rm -f "$cname" >/dev/null 2>&1 || true
   log "执行: docker compose -f $COMPOSE_FILE up -d $cname"
-  docker compose -f "$COMPOSE_FILE" up -d "$cname"
+  if ! docker compose -f "$COMPOSE_FILE" up -d "$cname"; then
+    err "docker compose up 启动 $cname 容器失败"
+    docker compose -f "$COMPOSE_FILE" logs "$cname" || true
+    return 1
+  fi
   log "容器 $cname 启动命令已执行，等待健康检查..."
   if ! health_check "$cname"; then
     err "❌ $cname 未通过健康检查，移除"
     docker rm -f "$cname" >/dev/null 2>&1 || true
+    docker compose -f "$COMPOSE_FILE" logs "$cname" || true
     return 1
   fi
   log "✅ $cname healthy"
   if [[ "$PRINT_SPRINGBOOT_LOG" == "true" ]]; then
     log "SpringBoot 容器 $cname 日志（最近${SPRINGBOOT_LOG_TAIL}行）如下："
-    docker logs --tail "$SPRINGBOOT_LOG_TAIL" "$cname"
+    docker logs --tail "$SPRINGBOOT_LOG_TAIL" "$cname" || true
   fi
   return 0
 }
@@ -159,15 +187,24 @@ reload_nginx() {
   log "准备 reload Nginx，等待容器健康..."
   if ! wait_nginx_healthy; then
     err "❌ Nginx 容器未健康，无法 reload"
+    docker logs --tail 30 "$NGINX_CONTAINER" || true
     return 1
   fi
   log "Nginx 容器健康，执行语法检查..."
-  docker exec "$NGINX_CONTAINER" nginx -t || {
-    err "❌ Nginx 语法检查失败"
+  local syntax_check_log
+  syntax_check_log=$(docker exec "$NGINX_CONTAINER" nginx -t 2>&1 || true)
+  if ! echo "$syntax_check_log" | grep -q 'syntax is ok'; then
+    err "❌ Nginx 语法检查失败, 详情："
+    echo "$syntax_check_log"
+    docker logs --tail 30 "$NGINX_CONTAINER" || true
     return 1
-  }
+  fi
   log "Nginx 语法检查通过，执行 reload..."
-  docker exec "$NGINX_CONTAINER" nginx -s reload
+  if ! docker exec "$NGINX_CONTAINER" nginx -s reload; then
+    err "❌ Nginx reload 失败"
+    docker logs --tail 30 "$NGINX_CONTAINER" || true
+    return 1
+  fi
   log "Nginx reload 完成"
 }
 
@@ -197,7 +234,7 @@ wait_any_slot_healthy() {
       log "$cname 健康状态: $st ($i/$HEALTH_RETRY)"
       if [[ "$st" == "starting" ]] && [[ "$PRINT_SPRINGBOOT_LOG" == "true" ]]; then
         log "SpringBoot 容器 $cname 日志（最近${SPRINGBOOT_LOG_TAIL_HEALTH}行）如下："
-        docker logs --tail "$SPRINGBOOT_LOG_TAIL_HEALTH" "$cname"
+        docker logs --tail "$SPRINGBOOT_LOG_TAIL_HEALTH" "$cname" || true
       fi
       if [ "$st" = "healthy" ]; then
         echo "$slot"
@@ -205,6 +242,11 @@ wait_any_slot_healthy() {
       fi
     done
     sleep "$HEALTH_INTERVAL"
+  done
+  log "所有槽位健康检查均未通过，拉取日志："
+  for slot in "${slots[@]}"; do
+    cname=$(slot_name_to_container "$slot")
+    docker logs --tail 30 "$cname" || true
   done
   echo ""
   return 1
@@ -215,13 +257,22 @@ docker pull "$IMAGE_NAME"
 
 ensure_network
 
+log "网络确保完毕，准备检查nginx容器是否存在..."
+log "DEBUG: NGINX_CONTAINER='$NGINX_CONTAINER'"
+docker ps -a
 if ! docker ps -a --format '{{.Names}}' | grep -q "^${NGINX_CONTAINER}$"; then
   log "准备启动 Nginx 服务容器: $NGINX_CONTAINER"
   log "执行: docker compose -f $COMPOSE_FILE up -d $NGINX_CONTAINER"
-  docker compose -f "$COMPOSE_FILE" up -d "$NGINX_CONTAINER"
+  if ! docker compose -f "$COMPOSE_FILE" up -d "$NGINX_CONTAINER"; then
+    err "docker compose up 启动 Nginx 容器失败"
+    docker compose -f "$COMPOSE_FILE" logs "$NGINX_CONTAINER" || true
+    exit 1
+  fi
   log "Nginx 容器启动命令已执行，等待健康检查..."
   if ! wait_nginx_healthy; then
     err "Nginx 容器启动未健康，请排查"
+    log "自动拉取Nginx容器日志："
+    docker logs --tail 30 "$NGINX_CONTAINER" || true
     exit 1
   fi
   log "Nginx 容器健康"
@@ -304,4 +355,8 @@ set_active_slot "$NEW_SLOT"
 log "✅ 部署完成，新 active: $NEW_SLOT"
 
 log "清理悬虚镜像"
-sudo docker image prune -f
+if sudo -n true 2>/dev/null; then
+  sudo docker image prune -f
+else
+  docker image prune -f
+fi
