@@ -1,0 +1,36 @@
+services:
+  postgres16:
+    image: ${PG_IMAGE:-postgres:16}
+    container_name: ${PG_CONTAINER_NAME:-postgres16}
+    restart: always
+    environment:
+      POSTGRES_USER: ${PG_SUPER_USER:-postgres}
+      POSTGRES_PASSWORD: ${PG_SUPER_PASSWORD}
+      POSTGRES_DB: ${PG_DB_NAME:-sz_admin_preview}
+      TZ: Asia/Shanghai
+    ports:
+      - "${PG_PORT:-127.0.0.1:5432}:5432"
+    volumes:
+      - ${PG_DATA_DIR:-/home/docker-compose/postgres/data}:/var/lib/postgresql/data
+      - ${PG_CONFIG_DIR:-/home/docker-compose/postgres/config}/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ${PG_CONFIG_DIR:-/home/docker-compose/postgres/config}/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ${PG_CONFIG_DIR:-/home/docker-compose/postgres/config}/initdb:/docker-entrypoint-initdb.d:ro
+      - ${PG_LOG_DIR:-/home/docker-compose/postgres/log}:/var/log/postgresql
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_SUPER_USER:-postgres} -d ${PG_DB_NAME:-sz_admin_preview}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - sz-network
+
+networks:
+  sz-network:
+    external: true
+    name: ${DOCKER_NETWORK_NAME:-sz-network}

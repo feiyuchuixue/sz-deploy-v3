@@ -27,13 +27,23 @@ SERVICE_NAME=sz-service-admin
 COMPOSE_DIR=/home/docker-compose/sz-service-admin
 CURRENT_DIR=$(pwd)   # 记录当前路径
 
-# 配置参数 - 根据实际情况修改
+# 数据库类型：mysql | postgresql（默认 mysql）
+DB_TYPE=${DB_TYPE:-mysql}
+
+# MySQL 配置参数
 CONTAINER_NAME="mysql8"       # MySQL容器名称
 DB_NAME="sz_admin_prod"       # 要创建的数据库名
 DB_USER="root"
 DB_PASSWORD="Sz2025@123456"  # 含特殊字符
 CHARSET="utf8mb4"             # 字符集
 COLLATE="utf8mb4_general_ci"  # 排序规则
+
+# PostgreSQL 配置参数
+PG_CONTAINER_NAME="${PG_CONTAINER_NAME:-postgres16}"
+PG_DB_NAME="${PG_DB_NAME:-sz_admin_prod}"
+PG_SUPER_USER="${PG_SUPER_USER:-postgres}"
+PG_SUPER_PASSWORD="${PG_SUPER_PASSWORD:-ChangeMe_Strong_Postgres_Password}"
+
 MAX_RETRIES=30              # 最大重试次数
 RETRY_INTERVAL=5            # 每次重试间隔（秒）
 
@@ -69,6 +79,27 @@ check_mysql_connection() {
     return 1
 }
 
+# 循环检查 PostgreSQL 连接
+check_pg_connection() {
+    local retry=0
+    log "INFO" "==========开始检查 PostgreSQL 连接（最多重试 $MAX_RETRIES 次，间隔 $RETRY_INTERVAL 秒）...=========="
+
+    while [ $retry -lt $MAX_RETRIES ]; do
+        if docker exec -i "$PG_CONTAINER_NAME" sh -c "pg_isready -U '$PG_SUPER_USER' -d '$PG_DB_NAME' >/dev/null 2>&1"; then
+            log "INFO" "✅ PostgreSQL 连接成功"
+            return 0
+        fi
+
+        retry=$((retry + 1))
+        remaining=$((MAX_RETRIES - retry))
+        log "INFO" "❌ 第 $retry 次连接失败，剩余 $remaining 次重试机会（$RETRY_INTERVAL 秒后重试）..."
+        sleep $RETRY_INTERVAL
+    done
+
+    log "INFO" "❌ 错误：超过最大重试次数 $MAX_RETRIES 次，PostgreSQL 仍无法连接"
+    return 1
+}
+
 # 创建数据库
 create_database() {
     log "INFO" "开始创建数据库 $DB_NAME..."
@@ -88,11 +119,21 @@ EOF
 
 service_init() {
   log "INFO" "==========[$SERVICE_NAME] 初始化=========="
+  log "INFO" "当前数据库类型：$DB_TYPE"
 
-  # 创建内置数据库
-  # 检查容器是否在运行
-  if check_mysql_connection; then
+  # 根据数据库类型执行对应的就绪检查
+  if [[ "$DB_TYPE" == "postgresql" ]]; then
+    # PostgreSQL：等待容器就绪（建库由 postgres/docker-compose.yml 的 POSTGRES_DB 参数负责）
+    if ! check_pg_connection; then
+      log "INFO" "❌ PostgreSQL 未就绪，中止部署"
+      exit 1
+    fi
+    log "INFO" "==========[$SERVICE_NAME] PostgreSQL 就绪，无需手动建库=========="
+  else
+    # MySQL：等待连接并建库
+    if check_mysql_connection; then
       create_database
+    fi
   fi
 
   mkdir -p "$COMPOSE_DIR"/config/prod

@@ -1,0 +1,17 @@
+services:
+  nginx-static:
+    image: registry.cn-beijing.aliyuncs.com/sz-dev/nginx:latest
+    container_name: nginx-static
+    restart: always
+    ports:
+      - "9700:80"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./conf.d:/etc/nginx/conf.d
+      - ./data:/data:ro
+    networks:
+      - sz-network
+networks:
+  sz-network:
+    external: true

@@ -7,9 +7,11 @@ services:
       - "9991:9991"
     environment:
       - SPRING_PROFILES_ACTIVE=prod
+      - DB_TYPE=${DB_TYPE:-mysql}
     volumes:
       - ./logs:/logs
       - ./config:/config
+      - ./data:/data
     networks:
       - sz-network
 networks:

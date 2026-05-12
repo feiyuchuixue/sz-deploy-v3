@@ -9,6 +9,7 @@ services:
       - ${NGINX_CONF}:/etc/nginx/nginx.conf:ro
       - ${NGINX_UPSTREAMS}:/etc/nginx/upstreams
       - ${NGINX_CONF_D}:/etc/nginx/conf.d
+      - ./data:/data:ro
     depends_on:
       - sz-service-admin-green
       - sz-service-admin-blue
@@ -20,9 +21,11 @@ services:
     restart: always
     environment:
       - SPRING_PROFILES_ACTIVE=${SPRING_ACTIVE}
+      - DB_TYPE=${DB_TYPE:-mysql}
     volumes:
       - ./logs:/logs
       - ./config:/config
+      - ./data:/data
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${HEALTH_PORT}${ACTUATOR_PATH} || exit 1"]
       interval: 10s
@@ -38,9 +41,11 @@ services:
     restart: always
     environment:
       - SPRING_PROFILES_ACTIVE=${SPRING_ACTIVE}
+      - DB_TYPE=${DB_TYPE:-mysql}
     volumes:
       - ./logs:/logs
       - ./config:/config
+      - ./data:/data
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${HEALTH_PORT}${ACTUATOR_PATH} || exit 1"]
       interval: 10s
