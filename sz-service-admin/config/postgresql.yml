@@ -1,7 +1,7 @@
 spring:
   datasource:
     driver-class-name: org.postgresql.Driver
-    url: jdbc:postgresql://postgres16:5432/sz_admin_prod
+    url: jdbc:postgresql://postgres18:5432/sz_admin_prod
     username: ${PG_INTERNAL_USER:sz_admin_prod_user_in}
     password: ${PG_INTERNAL_PASSWORD:ChangeMe_Strong_In_Password}
     hikari:

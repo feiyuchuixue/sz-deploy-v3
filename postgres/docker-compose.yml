@@ -6,12 +6,12 @@ services:
     environment:
       POSTGRES_USER: ${PG_SUPER_USER:-postgres}
       POSTGRES_PASSWORD: ${PG_SUPER_PASSWORD}
-      POSTGRES_DB: ${PG_DB_NAME:-sz_admin_preview}
+      POSTGRES_DB: ${PG_DB_NAME:-sz_admin_prod}
       TZ: Asia/Shanghai
     ports:
       - "${PG_PORT:-127.0.0.1:5432}:5432"
     volumes:
-      - ./data:/var/lib/postgresql/data
+      - ./data:/var/lib/postgresql
       - ./config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - ./config/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
       - ./config/initdb:/docker-entrypoint-initdb.d:ro
@@ -23,7 +23,7 @@ services:
       - -c
       - hba_file=/etc/postgresql/pg_hba.conf
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${PG_SUPER_USER:-postgres} -d ${PG_DB_NAME:-sz_admin_preview}"]
+      test: ["CMD-SHELL", "pg_isready -U ${PG_SUPER_USER:-postgres} -d ${PG_DB_NAME:-sz_admin_prod}"]
       interval: 10s
       timeout: 5s
       retries: 10

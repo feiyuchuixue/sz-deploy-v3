@@ -39,7 +39,7 @@ CHARSET="utf8mb4"             # 字符集
 COLLATE="utf8mb4_general_ci"  # 排序规则
 
 # PostgreSQL 配置参数
-PG_CONTAINER_NAME="${PG_CONTAINER_NAME:-postgres16}"
+PG_CONTAINER_NAME="${PG_CONTAINER_NAME:-postgres18}"
 PG_DB_NAME="${PG_DB_NAME:-sz_admin_prod}"
 PG_SUPER_USER="${PG_SUPER_USER:-postgres}"
 PG_SUPER_PASSWORD="${PG_SUPER_PASSWORD:-ChangeMe_Strong_Postgres_Password}"
