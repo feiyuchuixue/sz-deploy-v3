@@ -29,9 +29,9 @@ fi
 DOCKER_NETWORK_NAME="${DOCKER_NETWORK_NAME:-sz-network}"
 PG_MODE="${PG_MODE:-internal}"
 PG_DB_NAME="${PG_DB_NAME:-sz_admin_preview}"
-PG_INTERNAL_USER="${PG_INTERNAL_USER:-sz_admin_preview_user_in}"
+PG_INTERNAL_USER="${PG_INTERNAL_USER:-sz_admin_prod_user_in}"
 PG_INTERNAL_PASSWORD="${PG_INTERNAL_PASSWORD:-}"
-PG_EXTERNAL_USER="${PG_EXTERNAL_USER:-sz_admin_preview_user_out}"
+PG_EXTERNAL_USER="${PG_EXTERNAL_USER:-sz_admin_prod_user_out}"
 PG_EXTERNAL_PASSWORD="${PG_EXTERNAL_PASSWORD:-}"
 PG_EXTERNAL_CIDR="${PG_EXTERNAL_CIDR:-}"
 

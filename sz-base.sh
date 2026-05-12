@@ -36,9 +36,18 @@ main() {
   bash ./sz-1-env.sh
   bash ./sz-2-docker.sh
   bash ./sz-3-redis.sh
-  bash ./sz-4-mysql.sh
+
+  # 根据 DB_TYPE 选择数据库（默认 mysql）
+  DB_TYPE="${DB_TYPE:-mysql}"
+  if [ "$DB_TYPE" = "postgresql" ]; then
+    log "INFO" "DB_TYPE=postgresql，跳过 MySQL，部署 PostgreSQL"
+    bash ./sz-6-postgresql.sh
+  else
+    log "INFO" "DB_TYPE=mysql，部署 MySQL，跳过 PostgreSQL"
+    bash ./sz-4-mysql.sh
+  fi
+
   bash ./sz-5-minio.sh
-  bash ./sz-6-postgresql.sh
   log "INFO" "**********所有基础服务安装完成**********"
 }
 
