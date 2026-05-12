@@ -30,7 +30,7 @@ DOCKER_NETWORK_NAME="${DOCKER_NETWORK_NAME:-sz-network}"
 PG_MODE="${PG_MODE:-internal}"
 PG_DB_NAME="${PG_DB_NAME:-sz_admin_preview}"
 PG_INTERNAL_USER="${PG_INTERNAL_USER:-sz_admin_preview_user_in}"
-PG_INTERNAL_PASSWORD="${PG_INTERNAL_PASSWORD}"
+PG_INTERNAL_PASSWORD="${PG_INTERNAL_PASSWORD:-}"
 PG_EXTERNAL_USER="${PG_EXTERNAL_USER:-sz_admin_preview_user_out}"
 PG_EXTERNAL_PASSWORD="${PG_EXTERNAL_PASSWORD:-}"
 PG_EXTERNAL_CIDR="${PG_EXTERNAL_CIDR:-}"
@@ -43,17 +43,32 @@ if ! command -v docker &>/dev/null; then
   exit 1
 fi
 
+if ! command -v envsubst &>/dev/null; then
+  log "INFO" "envsubst 未找到，正在安装 gettext..."
+  sudo "${PKG_MGR:-dnf}" install -y gettext
+fi
+
 if ! docker network ls | grep -w "$DOCKER_NETWORK_NAME" &>/dev/null; then
   log "ERROR" "Docker 网络 $DOCKER_NETWORK_NAME 不存在，请先创建：docker network create $DOCKER_NETWORK_NAME"
   exit 1
 fi
 
+# 密码非空校验
+if [ -z "$PG_SUPER_PASSWORD" ]; then
+  log "ERROR" "PG_SUPER_PASSWORD 不能为空，请在 .env 中设置"
+  exit 1
+fi
+if [ -z "$PG_INTERNAL_PASSWORD" ]; then
+  log "ERROR" "PG_INTERNAL_PASSWORD 不能为空，请在 .env 中设置"
+  exit 1
+fi
+
 if [ "$PG_MODE" = "external" ]; then
-  if [ -z "${PG_EXTERNAL_CIDR:-}" ]; then
+  if [ -z "${PG_EXTERNAL_CIDR}" ]; then
     log "ERROR" "PG_MODE=external 时必须在 .env 中设置 PG_EXTERNAL_CIDR"
     exit 1
   fi
-  if [ -z "${PG_EXTERNAL_PASSWORD:-}" ]; then
+  if [ -z "${PG_EXTERNAL_PASSWORD}" ]; then
     log "ERROR" "PG_MODE=external 时必须在 .env 中设置 PG_EXTERNAL_PASSWORD"
     exit 1
   fi
@@ -95,26 +110,27 @@ else
   TPL_FILE="./templates/pg_hba.internal.conf.tpl"
 fi
 
-sed \
-  -e "s|\${PG_DB_NAME}|${PG_DB_NAME}|g" \
-  -e "s|\${PG_INTERNAL_USER}|${PG_INTERNAL_USER}|g" \
-  -e "s|\${PG_INTERNAL_SUBNET}|${PG_INTERNAL_SUBNET}|g" \
-  -e "s|\${PG_EXTERNAL_USER}|${PG_EXTERNAL_USER}|g" \
-  -e "s|\${PG_EXTERNAL_CIDR}|${PG_EXTERNAL_CIDR}|g" \
-  "$TPL_FILE" > ./config/pg_hba.conf
+# 仅导出 pg_hba 需要的变量，避免环境变量污染
+PG_DB_NAME="$PG_DB_NAME" \
+PG_INTERNAL_USER="$PG_INTERNAL_USER" \
+PG_INTERNAL_SUBNET="$PG_INTERNAL_SUBNET" \
+PG_EXTERNAL_USER="$PG_EXTERNAL_USER" \
+PG_EXTERNAL_CIDR="$PG_EXTERNAL_CIDR" \
+envsubst '${PG_DB_NAME}${PG_INTERNAL_USER}${PG_INTERNAL_SUBNET}${PG_EXTERNAL_USER}${PG_EXTERNAL_CIDR}' \
+  < "$TPL_FILE" > ./config/pg_hba.conf
 
 log "INFO" "pg_hba.conf 生成完成"
 
 # ── 渲染 initdb SQL（仅在数据目录为空时生效）────────────────────────────────
 log "INFO" "渲染 initdb SQL"
 
-sed \
-  -e "s|\${PG_DB_NAME}|${PG_DB_NAME}|g" \
-  -e "s|\${PG_INTERNAL_USER}|${PG_INTERNAL_USER}|g" \
-  -e "s|\${PG_INTERNAL_PASSWORD}|${PG_INTERNAL_PASSWORD}|g" \
-  -e "s|\${PG_EXTERNAL_USER}|${PG_EXTERNAL_USER}|g" \
-  -e "s|\${PG_EXTERNAL_PASSWORD}|${PG_EXTERNAL_PASSWORD}|g" \
-  ./initdb/01-init-users.sql.template > ./config/initdb/01-init-users.sql
+PG_DB_NAME="$PG_DB_NAME" \
+PG_INTERNAL_USER="$PG_INTERNAL_USER" \
+PG_INTERNAL_PASSWORD="$PG_INTERNAL_PASSWORD" \
+PG_EXTERNAL_USER="$PG_EXTERNAL_USER" \
+PG_EXTERNAL_PASSWORD="$PG_EXTERNAL_PASSWORD" \
+envsubst '${PG_DB_NAME}${PG_INTERNAL_USER}${PG_INTERNAL_PASSWORD}${PG_EXTERNAL_USER}${PG_EXTERNAL_PASSWORD}' \
+  < ./initdb/01-init-users.sql.template > ./config/initdb/01-init-users.sql
 
 log "INFO" "initdb SQL 生成完成"
 log "INFO" "==========setup.sh 完成=========="
