@@ -1,7 +1,7 @@
 services:
-  postgres16:
-    image: ${PG_IMAGE:-postgres:16}
-    container_name: ${PG_CONTAINER_NAME:-postgres16}
+  postgres18:
+    image: ${PG_IMAGE:-postgres:18.3}
+    container_name: ${PG_CONTAINER_NAME:-postgres18}
     restart: always
     environment:
       POSTGRES_USER: ${PG_SUPER_USER:-postgres}
@@ -11,11 +11,11 @@ services:
     ports:
       - "${PG_PORT:-127.0.0.1:5432}:5432"
     volumes:
-      - ${PG_DATA_DIR:-/home/docker-compose/postgres/data}:/var/lib/postgresql/data
-      - ${PG_CONFIG_DIR:-/home/docker-compose/postgres/config}/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-      - ${PG_CONFIG_DIR:-/home/docker-compose/postgres/config}/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
-      - ${PG_CONFIG_DIR:-/home/docker-compose/postgres/config}/initdb:/docker-entrypoint-initdb.d:ro
-      - ${PG_LOG_DIR:-/home/docker-compose/postgres/log}:/var/log/postgresql
+      - ./data:/var/lib/postgresql/data
+      - ./config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./config/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./config/initdb:/docker-entrypoint-initdb.d:ro
+      - ./log:/var/log/postgresql
     command:
       - postgres
       - -c

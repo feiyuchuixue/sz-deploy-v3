@@ -38,6 +38,7 @@ main() {
   bash ./sz-3-redis.sh
   bash ./sz-4-mysql.sh
   bash ./sz-5-minio.sh
+  bash ./sz-6-postgresql.sh
   log "INFO" "**********所有基础服务安装完成**********"
 }
 
