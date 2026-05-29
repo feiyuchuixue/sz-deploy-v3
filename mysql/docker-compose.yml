@@ -1,10 +1,11 @@
 services:
   mysql8:
-    image: registry.cn-beijing.aliyuncs.com/sz-dev/mysql:latest
+    image: ${MYSQL_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/mysql:latest}
     container_name: mysql8
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: Sz2025@123456
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-sz_admin_prod}
       TZ: Asia/Shanghai
     ports:
       - "3306:3306"
@@ -17,3 +18,4 @@ services:
 networks:
   sz-network:
     external: true
+    name: ${DOCKER_NETWORK_NAME:-sz-network}

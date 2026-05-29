@@ -1,11 +1,23 @@
 #!/bin/bash
 
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
+fi
+
 # === 配置项 ===
-BACKUP_ROOT="/home/data/mysql_backups"      # 机械硬盘挂载点
-MYSQL_CONTAINER="mysql8"                  # 容器名
-MYSQL_USER="root"                         # 数据库用户名
-MYSQL_PASSWORD="Sz2025@123456"            # 密码
-RETENTION_DAYS=90                        # 保留天数
+BACKUP_ROOT="${MYSQL_BACKUP_ROOT:-/home/data/mysql_backups}"
+MYSQL_CONTAINER="${MYSQL_CONTAINER:-mysql8}"
+MYSQL_USER="${MYSQL_USER:-root}"
+MYSQL_PASSWORD="${MYSQL_PASSWORD:-Sz2025@123456}"
+RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-90}"
 
 # === 生成时间变量 ===
 DATE_DIR=$(date +"%Y%m%d")

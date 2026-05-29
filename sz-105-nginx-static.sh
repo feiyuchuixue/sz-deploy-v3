@@ -1,9 +1,7 @@
 #!/bin/bash
 
-# 设置严格模式
 set -euo pipefail
-#set -e
-# 定义错误处理函数：打印错误信息、行号和命令
+
 error_handler() {
   local exit_code=$?
   local line_number=$1
@@ -13,9 +11,6 @@ error_handler() {
   echo "       退出码: $exit_code" >&2
   exit $exit_code
 }
-
-# 设置 trap 捕获错误，触发 error_handler 函数
-# $LINENO 表示当前行号，$BASH_COMMAND 表示正在执行的命令
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,11 +18,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/scripts/deploy-common.sh"
 load_deploy_env
 
-SERVICE_NAME=sz-admin
-COMPOSE_DIR=/home/docker-compose/sz-admin
-CURRENT_DIR=$(pwd)   # 记录当前路径
+SERVICE_NAME=sz-nginx-static
+COMPOSE_DIR=/home/docker-compose/sz-nginx-static
+CURRENT_DIR=$(pwd)
 
-# 日志函数
 log() {
   local type="$1"
   local msg="$2"
@@ -36,20 +30,20 @@ log() {
 
 service_init() {
   log "INFO" "==========[$SERVICE_NAME] 初始化=========="
+  log "INFO" "[$SERVICE_NAME] 部署目录: $COMPOSE_DIR"
+  log "INFO" "[$SERVICE_NAME] 资源目录: $RESOURCE_DATA_DIR"
+  log "INFO" "[$SERVICE_NAME] Nginx 镜像: $NGINX_IMAGE"
   mkdir -p "$COMPOSE_DIR"/conf.d
+  mkdir -p "$RESOURCE_DATA_DIR"
   cp ./"$SERVICE_NAME"/docker-compose.yml "$COMPOSE_DIR"
   cp ./"$SERVICE_NAME"/upgrade.sh "$COMPOSE_DIR"
+  cp ./"$SERVICE_NAME"/conf.d/default.conf "$COMPOSE_DIR"/conf.d
   write_runtime_env "$COMPOSE_DIR"
   chmod +x "$COMPOSE_DIR"/upgrade.sh
-  if [[ "${USE_BLUE_GREEN_DEPLOY:-false}" == "true" ]]; then
-    log "INFO" "[$SERVICE_NAME] 使用蓝绿部署模式"
-    cp ./"$SERVICE_NAME"/conf.d/default-blue-green.conf "$COMPOSE_DIR"/conf.d
-  else
-    log "INFO" "[$SERVICE_NAME] 使用普通部署模式"
-    cp ./"$SERVICE_NAME"/conf.d/default.conf "$COMPOSE_DIR"/conf.d
-  fi
 
+  log "INFO" "[$SERVICE_NAME] 启动 docker compose"
   cd "$COMPOSE_DIR" && docker compose up -d
+  docker ps --filter "name=nginx-static" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
   log "INFO" "[$SERVICE_NAME] 初始化完成"
   cd "$CURRENT_DIR"
 }
@@ -58,5 +52,4 @@ main() {
   service_init
 }
 
-# 调用主流程
 main "$@"

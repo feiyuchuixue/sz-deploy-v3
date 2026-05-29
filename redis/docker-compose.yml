@@ -1,6 +1,6 @@
 services:
   redis:
-    image: registry.cn-beijing.aliyuncs.com/sz-dev/redis:latest
+    image: ${REDIS_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/redis:latest}
     container_name: redis-server
     restart: always
     ports:
@@ -13,3 +13,4 @@ services:
 networks:
   sz-network:
     external: true
+    name: ${DOCKER_NETWORK_NAME:-sz-network}

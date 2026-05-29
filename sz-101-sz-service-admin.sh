@@ -18,10 +18,10 @@ error_handler() {
 # $LINENO 表示当前行号，$BASH_COMMAND 表示正在执行的命令
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
-# 载入上一级目录的 .env 文件
-if [ -f ../.env ]; then
-  export $(grep -v '^#' ../.env | xargs)
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/deploy-common.sh
+. "$SCRIPT_DIR/scripts/deploy-common.sh"
+load_deploy_env
 
 SERVICE_NAME=sz-service-admin
 COMPOSE_DIR=/home/docker-compose/sz-service-admin
@@ -121,6 +121,14 @@ service_init() {
   log "INFO" "==========[$SERVICE_NAME] 初始化=========="
   log "INFO" "当前数据库类型：$DB_TYPE"
 
+  if [[ "$DB_TYPE" == "postgresql" && -f /home/docker-compose/postgres/.env ]]; then
+    load_env_file /home/docker-compose/postgres/.env
+    PG_CONTAINER_NAME="${PG_CONTAINER_NAME:-postgres18}"
+    PG_DB_NAME="${PG_DB_NAME:-sz_admin_prod}"
+    PG_SUPER_USER="${PG_SUPER_USER:-postgres}"
+    PG_SUPER_PASSWORD="${PG_SUPER_PASSWORD:-ChangeMe_Strong_Postgres_Password}"
+  fi
+
   # 根据数据库类型执行对应的就绪检查
   if [[ "$DB_TYPE" == "postgresql" ]]; then
     # PostgreSQL：等待容器就绪（建库由 postgres/docker-compose.yml 的 POSTGRES_DB 参数负责）
@@ -137,6 +145,7 @@ service_init() {
   fi
 
   mkdir -p "$COMPOSE_DIR"/config/prod
+  mkdir -p "$RESOURCE_DATA_DIR"
   cp ./"$SERVICE_NAME"/config/* "$COMPOSE_DIR"/config/prod
   if [[ "${USE_BLUE_GREEN_DEPLOY:-false}" == "true" ]]; then
     log "INFO" "[$SERVICE_NAME] 使用蓝绿部署模式"
@@ -146,6 +155,18 @@ service_init() {
     cp ./"$SERVICE_NAME"/blue-green/docker-compose.yml.template "$COMPOSE_DIR"
     cp ./"$SERVICE_NAME"/blue-green/gen-conf.sh "$COMPOSE_DIR"
     cp ./"$SERVICE_NAME"/blue-green/nginx/nginx.conf "$COMPOSE_DIR"/nginx
+    upsert_env_value "$COMPOSE_DIR/.env" "DB_TYPE" "$DB_TYPE"
+    upsert_env_value "$COMPOSE_DIR/.env" "IMAGE_NAME" "$SZ_SERVICE_ADMIN_IMAGE"
+    upsert_env_value "$COMPOSE_DIR/.env" "IMAGE_NAME_NGINX" "$NGINX_IMAGE"
+    upsert_env_value "$COMPOSE_DIR/.env" "SPRING_ACTIVE" "$SPRING_PROFILES_ACTIVE"
+    upsert_env_value "$COMPOSE_DIR/.env" "NETWORK_NAME" "$DOCKER_NETWORK_NAME"
+    upsert_env_value "$COMPOSE_DIR/.env" "RESOURCE_DATA_DIR" "$RESOURCE_DATA_DIR"
+    upsert_env_value "$COMPOSE_DIR/.env" "PAGE_HELPER_DIALECT" "$PAGE_HELPER_DIALECT"
+    upsert_env_value "$COMPOSE_DIR/.env" "PG_INTERNAL_USER" "${PG_INTERNAL_USER:-sz_admin_prod_user_in}"
+    upsert_env_value "$COMPOSE_DIR/.env" "PG_INTERNAL_PASSWORD" "${PG_INTERNAL_PASSWORD:-ChangeMe_Strong_In_Password}"
+    upsert_env_value "$COMPOSE_DIR/.env" "IMAGE_PULL" "$IMAGE_PULL"
+    upsert_env_value "$COMPOSE_DIR/.env" "PRUNE_IMAGES" "$PRUNE_IMAGES"
+    upsert_env_value "$COMPOSE_DIR/.env" "PKG_MGR" "$PKG_MGR"
     chmod +x "$COMPOSE_DIR"/gen-conf.sh
     chmod +x "$COMPOSE_DIR"/deploy.sh
 
@@ -159,6 +180,7 @@ service_init() {
     log "INFO" "[$SERVICE_NAME] 使用普通部署模式"
     cp ./"$SERVICE_NAME"/docker-compose.yml "$COMPOSE_DIR"
     cp ./"$SERVICE_NAME"/upgrade.sh "$COMPOSE_DIR"
+    write_runtime_env "$COMPOSE_DIR"
     chmod +x "$COMPOSE_DIR"/upgrade.sh
     cd "$COMPOSE_DIR" && docker compose up -d
   fi

@@ -26,6 +26,9 @@ SPRINGBOOT_LOG_TAIL="${SPRINGBOOT_LOG_TAIL:-100}"
 SPRINGBOOT_LOG_TAIL_HEALTH="${SPRINGBOOT_LOG_TAIL_HEALTH:-10}"
 PRINT_SPRINGBOOT_LOG="${PRINT_SPRINGBOOT_LOG:-true}"
 NGINX_GRACE_PERIOD="${NGINX_GRACE_PERIOD:-5}" # 切换后等待秒数
+IMAGE_PULL="${IMAGE_PULL:-false}"
+PRUNE_IMAGES="${PRUNE_IMAGES:-false}"
+RESOURCE_DATA_DIR="${RESOURCE_DATA_DIR:-/home/data/sz-resource}"
 
 LOCK_FILE="${LOCK_FILE:-deploy.lock}"
 exec 9>"$LOCK_FILE"
@@ -210,8 +213,14 @@ wait_any_slot_healthy() {
   return 1
 }
 
-log "拉取镜像: $IMAGE_NAME"
-docker pull "$IMAGE_NAME"
+mkdir -p "$RESOURCE_DATA_DIR"
+
+if [ "$IMAGE_PULL" = "true" ]; then
+  log "拉取镜像: $IMAGE_NAME"
+  docker pull "$IMAGE_NAME"
+else
+  log "IMAGE_PULL=$IMAGE_PULL，跳过镜像拉取"
+fi
 
 ensure_network
 
@@ -303,5 +312,7 @@ remove_slot "$ACTIVE_SLOT"
 set_active_slot "$NEW_SLOT"
 log "✅ 部署完成，新 active: $NEW_SLOT"
 
-log "清理悬虚镜像"
-sudo docker image prune -f
+if [ "$PRUNE_IMAGES" = "true" ]; then
+  log "清理悬虚镜像"
+  sudo docker image prune -f
+fi

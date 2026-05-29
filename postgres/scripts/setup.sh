@@ -20,7 +20,10 @@ log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$
 
 # ── 载入 .env ──────────────────────────────────────────────────────────────
 if [ -f .env ]; then
-  export $(grep -v '^#' .env | xargs)
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
 else
   log "ERROR" ".env 文件不存在，请先从 .env.example 复制并填写配置"
   exit 1

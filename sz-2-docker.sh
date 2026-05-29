@@ -17,10 +17,10 @@ error_handler() {
 # $LINENO 表示当前行号，$BASH_COMMAND 表示正在执行的命令
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
-# 载入上一级目录的 .env 文件
-if [ -f ../.env ]; then
-  export $(grep -v '^#' ../.env | xargs)
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/deploy-common.sh
+. "$SCRIPT_DIR/scripts/deploy-common.sh"
+load_deploy_env
 
 CURRENT_DIR=$(pwd)
 
@@ -54,8 +54,12 @@ install_docker() {
   sudo systemctl status docker --no-pager || true
   log "INFO" "Docker 安装完成"
 
-  # 验证Docker Compose 是否存在，如果不存在进行安装
-  if ! command -v docker-compose &> /dev/null; then
+  # 验证 Docker Compose 是否存在，如果不存在进行安装
+  if docker compose version &> /dev/null; then
+     log "INFO" "Docker Compose 插件已安装，版本: $(docker compose version)"
+  elif command -v docker-compose &> /dev/null; then
+     log "INFO" "Docker Compose 已安装，版本: $(docker-compose --version)"
+  else
      log "INFO" "开始安装 Docker Compose"
      # 安装docker compose
      curl -L "$DOCKER_COMPOSE_URL" -o docker-compose
@@ -64,8 +68,6 @@ install_docker() {
      # 打印版本
      docker-compose --version
      log "INFO" "Docker Compose 安装完成"
-  else
-     log "INFO" "Docker Compose 已安装，版本: $(docker-compose --version)"
   fi
 
   # 创建指定的docker 网络

@@ -1,6 +1,6 @@
 services:
   sz-admin:
-    image: registry.cn-beijing.aliyuncs.com/sz-dev/sz-admin:latest
+    image: ${SZ_ADMIN_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/sz-admin:latest}
     container_name: sz-admin
     restart: always
     ports:
@@ -14,3 +14,4 @@ services:
 networks:
   sz-network:
     external: true
+    name: ${DOCKER_NETWORK_NAME:-sz-network}
