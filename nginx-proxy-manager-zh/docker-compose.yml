@@ -1,6 +1,6 @@
 services:
   app:
-    image: 'registry.cn-beijing.aliyuncs.com/sz-dev/nginx-proxy-manager-zh:latest'
+    image: ${NPM_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/nginx-proxy-manager-zh:latest}
     container_name: nginx-proxy-manager
     restart: always
     ports:
@@ -15,3 +15,4 @@ services:
 networks:
   sz-network:
     external: true
+    name: ${DOCKER_NETWORK_NAME:-sz-network}

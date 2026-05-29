@@ -32,13 +32,13 @@ sa-token:
   # 同一账号最大登录数量，-1代表不限
   max-login-count: -1
 # 接口白名单
-router:
-  whitelist:
-    - "/v3/api-docs/**"
-    - "/doc.html"
-    - "/webjars/**"
-    - "/swagger-resources"
-    - "/favicon.ico"
-    - "/swagger-ui.html"
-    - "/www/**"
-    - "/wechat/**"
+#router:
+#  whitelist:
+#    - "/v3/api-docs/**"
+#    - "/doc.html"
+#    - "/webjars/**"
+#    - "/swagger-resources"
+#    - "/favicon.ico"
+#    - "/swagger-ui.html"
+#    - "/www/**"
+#    - "/wechat/**"

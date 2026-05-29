@@ -1,6 +1,6 @@
 services:
   minio:
-    image: registry.cn-beijing.aliyuncs.com/sz-dev/minio:latest
+    image: ${MINIO_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/minio:latest}
     container_name: minio
     restart: always
     ports:
@@ -19,3 +19,4 @@ services:
 networks:
   sz-network:
     external: true
+    name: ${DOCKER_NETWORK_NAME:-sz-network}

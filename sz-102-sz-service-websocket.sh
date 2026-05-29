@@ -18,10 +18,10 @@ error_handler() {
 # $LINENO 表示当前行号，$BASH_COMMAND 表示正在执行的命令
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
-# 载入上一级目录的 .env 文件
-if [ -f ../.env ]; then
-  export $(grep -v '^#' ../.env | xargs)
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/deploy-common.sh
+. "$SCRIPT_DIR/scripts/deploy-common.sh"
+load_deploy_env
 
 SERVICE_NAME=sz-service-websocket
 COMPOSE_DIR=/home/docker-compose/sz-service-websocket
@@ -39,6 +39,7 @@ service_init() {
   mkdir -p "$COMPOSE_DIR"/config/prod
   cp ./"$SERVICE_NAME"/docker-compose.yml "$COMPOSE_DIR"
   cp ./"$SERVICE_NAME"/upgrade.sh "$COMPOSE_DIR"
+  write_runtime_env "$COMPOSE_DIR"
   chmod +x "$COMPOSE_DIR"/upgrade.sh
   cd "$COMPOSE_DIR" && docker compose up -d
   log "INFO" "[$SERVICE_NAME] 初始化完成"

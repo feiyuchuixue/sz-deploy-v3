@@ -1,0 +1,16 @@
+services:
+  nginx-static:
+    image: ${NGINX_IMAGE:-nginx:1.27.3}
+    container_name: nginx-static
+    restart: always
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./conf.d:/etc/nginx/conf.d:ro
+      - ${RESOURCE_DATA_DIR:-/home/data/sz-resource}:/data:ro
+    networks:
+      - sz-network
+networks:
+  sz-network:
+    external: true
+    name: ${DOCKER_NETWORK_NAME:-sz-network}

@@ -19,10 +19,10 @@ error_handler() {
 # $LINENO 表示当前行号，$BASH_COMMAND 表示正在执行的命令
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
-# 载入上一级目录的 .env 文件
-if [ -f ../.env ]; then
-  export $(grep -v '^#' ../.env | xargs)
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/deploy-common.sh
+. "$SCRIPT_DIR/scripts/deploy-common.sh"
+load_deploy_env
 
 # 日志函数
 log() {
@@ -36,7 +36,17 @@ main() {
   bash ./sz-1-env.sh
   bash ./sz-2-docker.sh
   bash ./sz-3-redis.sh
-  bash ./sz-4-mysql.sh
+
+  # 根据 DB_TYPE 选择数据库（默认 mysql）
+  DB_TYPE="${DB_TYPE:-mysql}"
+  if [ "$DB_TYPE" = "postgresql" ]; then
+    log "INFO" "DB_TYPE=postgresql，跳过 MySQL，部署 PostgreSQL"
+    bash ./sz-6-postgresql.sh
+  else
+    log "INFO" "DB_TYPE=mysql，部署 MySQL，跳过 PostgreSQL"
+    bash ./sz-4-mysql.sh
+  fi
+
   bash ./sz-5-minio.sh
   log "INFO" "**********所有基础服务安装完成**********"
 }

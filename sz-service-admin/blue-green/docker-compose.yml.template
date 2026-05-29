@@ -9,9 +9,7 @@ services:
       - ${NGINX_CONF}:/etc/nginx/nginx.conf:ro
       - ${NGINX_UPSTREAMS}:/etc/nginx/upstreams
       - ${NGINX_CONF_D}:/etc/nginx/conf.d
-    depends_on:
-      - sz-service-admin-green
-      - sz-service-admin-blue
+      - ${RESOURCE_DATA_DIR}:/data:ro
     networks:
       - ${NETWORK_NAME}
   sz-service-admin-green:
@@ -20,9 +18,14 @@ services:
     restart: always
     environment:
       - SPRING_PROFILES_ACTIVE=${SPRING_ACTIVE}
+      - DB_TYPE=${DB_TYPE}
+      - PAGE_HELPER_DIALECT=${PAGE_HELPER_DIALECT}
+      - PG_INTERNAL_USER=${PG_INTERNAL_USER}
+      - PG_INTERNAL_PASSWORD=${PG_INTERNAL_PASSWORD}
     volumes:
       - ./logs:/logs
       - ./config:/config
+      - ${RESOURCE_DATA_DIR}:/data
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${HEALTH_PORT}${ACTUATOR_PATH} || exit 1"]
       interval: 10s
@@ -38,9 +41,14 @@ services:
     restart: always
     environment:
       - SPRING_PROFILES_ACTIVE=${SPRING_ACTIVE}
+      - DB_TYPE=${DB_TYPE}
+      - PAGE_HELPER_DIALECT=${PAGE_HELPER_DIALECT}
+      - PG_INTERNAL_USER=${PG_INTERNAL_USER}
+      - PG_INTERNAL_PASSWORD=${PG_INTERNAL_PASSWORD}
     volumes:
       - ./logs:/logs
       - ./config:/config
+      - ${RESOURCE_DATA_DIR}:/data
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${HEALTH_PORT}${ACTUATOR_PATH} || exit 1"]
       interval: 10s

@@ -4,11 +4,15 @@ set -euo pipefail
 
 # 载入 .env 文件
 if [ -f .env ]; then
-  export $(grep -v '^#' .env | xargs)
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
 fi
 
-SERVICE_DIR=sz-deploy
+SERVICE_DIR="${SCRIPT_DIR:-sz-deploy}"
 CURRENT_DIR=$(pwd)
+PKG_MGR="${PKG_MGR:-dnf}"
 
 log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$type] $msg"; }
 

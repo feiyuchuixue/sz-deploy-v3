@@ -1,17 +1,23 @@
 services:
   sz-service-admin:
-    image: registry.cn-beijing.aliyuncs.com/sz-dev/sz-service-admin:latest
+    image: ${SZ_SERVICE_ADMIN_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/sz-service-admin:latest}
     container_name: sz-service-admin
     restart: always
     ports:
       - "9991:9991"
     environment:
-      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod}
+      - DB_TYPE=${DB_TYPE:-mysql}
+      - PAGE_HELPER_DIALECT=${PAGE_HELPER_DIALECT:-mysql}
+      - PG_INTERNAL_USER=${PG_INTERNAL_USER:-sz_admin_prod_user_in}
+      - PG_INTERNAL_PASSWORD=${PG_INTERNAL_PASSWORD:-ChangeMe_Strong_In_Password}
     volumes:
       - ./logs:/logs
       - ./config:/config
+      - ${RESOURCE_DATA_DIR:-/home/data/sz-resource}:/data
     networks:
       - sz-network
 networks:
   sz-network:
     external: true
+    name: ${DOCKER_NETWORK_NAME:-sz-network}
