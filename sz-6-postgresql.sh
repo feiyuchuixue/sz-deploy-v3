@@ -17,16 +17,22 @@ error_handler() {
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/deploy-common.sh
-. "$SCRIPT_DIR/scripts/deploy-common.sh"
-load_deploy_env
+# shellcheck source=scripts/install-config.sh
+. "$SCRIPT_DIR/scripts/install-config.sh"
+install_require_context
+cd "$SCRIPT_DIR"
 
-COMPOSE_DIR=/home/docker-compose/postgres
+COMPOSE_DIR="$DEPLOY_ROOT/postgres"
 CURRENT_DIR=$(pwd)
 
 log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$type] $msg"; }
 
 postgres_init() {
+  if [[ -e "$COMPOSE_DIR/.env" ]]; then
+    [[ -f "$COMPOSE_DIR/.env" && ! -L "$COMPOSE_DIR/.env" ]] || return 1
+    log "INFO" "运行配置已存在，保留现场文件与容器；请使用运行目录 upgrade.sh"
+    return 0
+  fi
   log "INFO" "==========PostgreSQL 初始化=========="
 
   # 创建部署目录
@@ -40,32 +46,8 @@ postgres_init() {
   cp -r ./postgres/initdb "${COMPOSE_DIR}"
   cp -r ./postgres/scripts "${COMPOSE_DIR}"
 
-  # 若 .env 不存在则从示例文件复制，避免覆盖用户已有配置
-  if [ ! -f "${COMPOSE_DIR}/.env" ]; then
-    cp ./postgres/.env.example "${COMPOSE_DIR}/.env"
-    log "WARN" "已从 .env.example 复制为 .env，建议修改密码后再继续使用"
-    log "WARN" "路径: ${COMPOSE_DIR}/.env"
-  else
-    log "INFO" ".env 已存在，跳过复制"
-  fi
-
-  upsert_env_value "${COMPOSE_DIR}/.env" "DOCKER_NETWORK_NAME" "${DOCKER_NETWORK_NAME}"
-  upsert_env_value "${COMPOSE_DIR}/.env" "PG_MODE" "${PG_MODE:-internal}"
-  upsert_env_value "${COMPOSE_DIR}/.env" "PG_PORT" "${PG_PORT:-127.0.0.1:5432}"
-  upsert_env_value "${COMPOSE_DIR}/.env" "PG_CONTAINER_NAME" "${PG_CONTAINER_NAME:-postgres18}"
-  upsert_env_value "${COMPOSE_DIR}/.env" "PG_IMAGE" "${PG_IMAGE:-postgres:18.3}"
-  upsert_env_value "${COMPOSE_DIR}/.env" "PG_SUPER_USER" "${PG_SUPER_USER:-postgres}"
-  upsert_env_value "${COMPOSE_DIR}/.env" "PG_SUPER_PASSWORD" "${PG_SUPER_PASSWORD:-ChangeMe_Strong_Postgres_Password}"
-  upsert_env_value "${COMPOSE_DIR}/.env" "PG_DB_NAME" "${PG_DB_NAME:-sz_admin_prod}"
-  upsert_env_value "${COMPOSE_DIR}/.env" "PG_INTERNAL_USER" "${PG_INTERNAL_USER:-sz_admin_prod_user_in}"
-  upsert_env_value "${COMPOSE_DIR}/.env" "PG_INTERNAL_PASSWORD" "${PG_INTERNAL_PASSWORD:-ChangeMe_Strong_In_Password}"
-  upsert_env_value "${COMPOSE_DIR}/.env" "PG_EXTERNAL_USER" "${PG_EXTERNAL_USER:-sz_admin_prod_user_out}"
-  upsert_env_value "${COMPOSE_DIR}/.env" "PG_EXTERNAL_PASSWORD" "${PG_EXTERNAL_PASSWORD:-ChangeMe_Strong_Out_Password}"
-  upsert_env_value "${COMPOSE_DIR}/.env" "PG_EXTERNAL_CIDR" "${PG_EXTERNAL_CIDR:-}"
-  upsert_env_value "${COMPOSE_DIR}/.env" "PG_INTERNAL_SUBNET" "${PG_INTERNAL_SUBNET:-}"
-  upsert_env_value "${COMPOSE_DIR}/.env" "BACKUP_ENABLED" "${BACKUP_ENABLED}"
-  upsert_env_value "${COMPOSE_DIR}/.env" "BACKUP_RETENTION_DAYS" "${BACKUP_RETENTION_DAYS}"
-  upsert_env_value "${COMPOSE_DIR}/.env" "POSTGRES_BACKUP_ROOT" "${POSTGRES_BACKUP_ROOT}"
+  install_write_service_env "$COMPOSE_DIR" postgres
+  install_copy_env_tool "$COMPOSE_DIR"
 
   # 切到部署目录，执行 setup（探测子网、渲染配置）
   cd "${COMPOSE_DIR}"
@@ -73,7 +55,9 @@ postgres_init() {
   bash ./scripts/setup.sh
 
   # 启动容器
-  docker compose --env-file .env up -d
+  cd "$COMPOSE_DIR"
+  docker compose --project-directory "$COMPOSE_DIR" --env-file "$COMPOSE_DIR/.env" -f "$COMPOSE_DIR/docker-compose.yml" config -q
+  docker compose --project-directory "$COMPOSE_DIR" --env-file "$COMPOSE_DIR/.env" -f "$COMPOSE_DIR/docker-compose.yml" up -d
 
   log "INFO" "PostgreSQL 初始化完成"
   cd "$CURRENT_DIR"

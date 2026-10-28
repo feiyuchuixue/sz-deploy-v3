@@ -1,23 +1,25 @@
 services:
-  sz-service-nginx:
-    image: ${IMAGE_NAME_NGINX}
-    container_name: sz-service-nginx
+  ${NGINX_CONTAINER}:
+    image: ${NGINX_IMAGE}
+    container_name: ${NGINX_CONTAINER}
     restart: always
     ports:
-      - "${NGINX_PORT}:${NGINX_PORT}"
+      - "${SZ_SERVICE_ADMIN_PORT}:${NGINX_PORT}"
     volumes:
       - ${NGINX_CONF}:/etc/nginx/nginx.conf:ro
       - ${NGINX_UPSTREAMS}:/etc/nginx/upstreams
       - ${NGINX_CONF_D}:/etc/nginx/conf.d
       - ${RESOURCE_DATA_DIR}:/data:ro
     networks:
-      - ${NETWORK_NAME}
-  sz-service-admin-green:
-    image: ${IMAGE_NAME}
-    container_name: sz-service-admin-green
+      ${DOCKER_NETWORK_NAME}:
+        aliases:
+          - sz-service-nginx
+  ${GREEN_NAME}:
+    image: ${SZ_SERVICE_ADMIN_IMAGE}
+    container_name: ${GREEN_NAME}
     restart: always
     environment:
-      - SPRING_PROFILES_ACTIVE=${SPRING_ACTIVE}
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE}
       - DB_TYPE=${DB_TYPE}
     volumes:
       - ./logs:/logs
@@ -30,14 +32,14 @@ services:
       retries: 3
       start_period: 15s
     networks:
-      - ${NETWORK_NAME}
+      - ${DOCKER_NETWORK_NAME}
 
-  sz-service-admin-blue:
-    image: ${IMAGE_NAME}
-    container_name: sz-service-admin-blue
+  ${BLUE_NAME}:
+    image: ${SZ_SERVICE_ADMIN_IMAGE}
+    container_name: ${BLUE_NAME}
     restart: always
     environment:
-      - SPRING_PROFILES_ACTIVE=${SPRING_ACTIVE}
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE}
       - DB_TYPE=${DB_TYPE}
     volumes:
       - ./logs:/logs
@@ -50,8 +52,8 @@ services:
       retries: 3
       start_period: 15s
     networks:
-      - ${NETWORK_NAME}
+      - ${DOCKER_NETWORK_NAME}
 
 networks:
-  ${NETWORK_NAME}:
+  ${DOCKER_NETWORK_NAME}:
     external: true

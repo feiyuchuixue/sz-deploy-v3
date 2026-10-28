@@ -19,12 +19,13 @@ error_handler() {
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/deploy-common.sh
-. "$SCRIPT_DIR/scripts/deploy-common.sh"
-load_deploy_env
+# shellcheck source=scripts/install-config.sh
+. "$SCRIPT_DIR/scripts/install-config.sh"
+install_require_context
+cd "$SCRIPT_DIR"
 
 SERVICE_NAME=sz-admin
-COMPOSE_DIR=/home/docker-compose/sz-admin
+COMPOSE_DIR="$DEPLOY_ROOT/sz-admin"
 CURRENT_DIR=$(pwd)   # 记录当前路径
 
 # 日志函数
@@ -35,12 +36,18 @@ log() {
 }
 
 service_init() {
+  if [[ -e "$COMPOSE_DIR/.env" ]]; then
+    [[ -f "$COMPOSE_DIR/.env" && ! -L "$COMPOSE_DIR/.env" ]] || return 1
+    log "INFO" "运行配置已存在，保留现场文件与容器；请使用运行目录 upgrade.sh"
+    return 0
+  fi
   local selected_conf inactive_conf
   log "INFO" "==========[$SERVICE_NAME] 初始化=========="
   mkdir -p "$COMPOSE_DIR"/conf.d
   cp ./"$SERVICE_NAME"/docker-compose.yml "$COMPOSE_DIR"
   cp ./"$SERVICE_NAME"/upgrade.sh "$COMPOSE_DIR"
-  write_runtime_env "$COMPOSE_DIR" frontend
+  install_write_service_env "$COMPOSE_DIR" frontend
+  install_copy_env_tool "$COMPOSE_DIR"
   chmod +x "$COMPOSE_DIR"/upgrade.sh
   if [[ "${USE_BLUE_GREEN_DEPLOY:-false}" == "true" ]]; then
     log "INFO" "[$SERVICE_NAME] 使用蓝绿部署模式"
@@ -57,9 +64,11 @@ service_init() {
   fi
   cp ./"$SERVICE_NAME"/conf.d/"$selected_conf" "$COMPOSE_DIR"/conf.d
 
-  cd "$COMPOSE_DIR" && docker compose up -d
-  docker compose exec -T sz-admin nginx -t
-  docker compose exec -T sz-admin nginx -s reload
+  cd "$COMPOSE_DIR"
+  docker compose --project-directory "$COMPOSE_DIR" --env-file "$COMPOSE_DIR/.env" -f "$COMPOSE_DIR/docker-compose.yml" config -q
+  docker compose --project-directory "$COMPOSE_DIR" --env-file "$COMPOSE_DIR/.env" -f "$COMPOSE_DIR/docker-compose.yml" up -d
+  docker compose --project-directory "$COMPOSE_DIR" --env-file "$COMPOSE_DIR/.env" -f "$COMPOSE_DIR/docker-compose.yml" exec -T sz-admin nginx -t
+  docker compose --project-directory "$COMPOSE_DIR" --env-file "$COMPOSE_DIR/.env" -f "$COMPOSE_DIR/docker-compose.yml" exec -T sz-admin nginx -s reload
   log "INFO" "[$SERVICE_NAME] 初始化完成"
   cd "$CURRENT_DIR"
 }

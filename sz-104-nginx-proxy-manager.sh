@@ -18,23 +18,32 @@ error_handler() {
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/deploy-common.sh
-. "$SCRIPT_DIR/scripts/deploy-common.sh"
-load_deploy_env
+# shellcheck source=scripts/install-config.sh
+. "$SCRIPT_DIR/scripts/install-config.sh"
+install_require_context
+cd "$SCRIPT_DIR"
 
-COMPOSE_DIR=/home/docker-compose/nginx-proxy-manager-zh
+COMPOSE_DIR="$DEPLOY_ROOT/nginx-proxy-manager-zh"
 CURRENT_DIR=$(pwd)
 
 log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$type] $msg"; }
 
 npm_init() {
+  if [[ -e "$COMPOSE_DIR/.env" ]]; then
+    [[ -f "$COMPOSE_DIR/.env" && ! -L "$COMPOSE_DIR/.env" ]] || return 1
+    log "INFO" "运行配置已存在，保留现场文件与容器；请使用运行目录 upgrade.sh"
+    return 0
+  fi
   log "INFO" "==========nginx-proxy-manager-zh 初始化=========="
   mkdir -p "${COMPOSE_DIR}"
   cp ./nginx-proxy-manager-zh/docker-compose.yml "${COMPOSE_DIR}"
   cp ./nginx-proxy-manager-zh/upgrade.sh "${COMPOSE_DIR}"
-  write_runtime_env "${COMPOSE_DIR}" npm
+  install_write_service_env "${COMPOSE_DIR}" npm
+  install_copy_env_tool "$COMPOSE_DIR"
 
-  cd "${COMPOSE_DIR}" && docker compose up -d
+  cd "$COMPOSE_DIR"
+  docker compose --project-directory "$COMPOSE_DIR" --env-file "$COMPOSE_DIR/.env" -f "$COMPOSE_DIR/docker-compose.yml" config -q
+  docker compose --project-directory "$COMPOSE_DIR" --env-file "$COMPOSE_DIR/.env" -f "$COMPOSE_DIR/docker-compose.yml" up -d
   log "INFO" "nginx-proxy-manager-zh 初始化完成"
   cd "$CURRENT_DIR"
 }

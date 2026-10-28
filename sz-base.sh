@@ -20,9 +20,10 @@ error_handler() {
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/deploy-common.sh
-. "$SCRIPT_DIR/scripts/deploy-common.sh"
-load_deploy_env
+# shellcheck source=scripts/install-config.sh
+. "$SCRIPT_DIR/scripts/install-config.sh"
+install_require_context
+cd "$SCRIPT_DIR"
 
 # 日志函数
 log() {

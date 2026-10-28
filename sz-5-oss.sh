@@ -19,20 +19,21 @@ error_handler() {
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/deploy-common.sh
-. "$SCRIPT_DIR/scripts/deploy-common.sh"
-load_deploy_env
+# shellcheck source=scripts/install-config.sh
+. "$SCRIPT_DIR/scripts/install-config.sh"
+install_require_context
+cd "$SCRIPT_DIR"
 
-COMPOSE_DIR="/home/docker-compose/${OSS_SERVICE_DIR}"
+COMPOSE_DIR="$DEPLOY_ROOT/${OSS_SERVICE_DIR}"
 CURRENT_DIR=$(pwd)
 
 log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$type] $msg"; }
 
 storage_container_name() {
   if [[ "$OSS_PROVIDER" == "RUSTFS" ]]; then
-    printf '%s\n' 'rustfs'
+    printf '%s\n' "$RUSTFS_CONTAINER"
   else
-    printf '%s\n' 'minio'
+    printf '%s\n' "$MINIO_CONTAINER"
   fi
 }
 
@@ -41,11 +42,11 @@ ensure_storage_ports_available() {
   local conflicts
 
   conflicts="$({
-    docker ps --filter publish=9000 --format '{{.Names}}'
-    docker ps --filter publish=9001 --format '{{.Names}}'
-  } | sort -u | grep -vx "$expected_container" || true)"
+    docker ps --filter "publish=${OSS_API_PORT##*:}" --format '{{.Names}}'
+    docker ps --filter "publish=${OSS_CONSOLE_PORT##*:}" --format '{{.Names}}'
+  } | sort -u | grep -Fvx "$expected_container" || true)"
   if [[ -n "$conflicts" ]]; then
-    echo "对象存储端口 9000/9001 已被其他容器占用：${conflicts//$'\n'/, }" >&2
+    echo "对象存储目标端口 ${OSS_API_PORT}/${OSS_CONSOLE_PORT} 已被其他容器占用：${conflicts//$'\n'/, }" >&2
     echo "请先按迁移与回退文档处理旧 provider；部署脚本不会自动停止现有对象存储。" >&2
     return 1
   fi
@@ -79,6 +80,11 @@ wait_for_storage_health() {
 }
 
 object_storage_init() {
+  if [[ -e "$COMPOSE_DIR/.env" ]]; then
+    [[ -f "$COMPOSE_DIR/.env" && ! -L "$COMPOSE_DIR/.env" ]] || return 1
+    log "INFO" "运行配置已存在，保留现场文件与容器；请使用运行目录 upgrade.sh"
+    return 0
+  fi
   local container_name
   container_name="$(storage_container_name)"
   log "INFO" "==========${OSS_PROVIDER} 初始化=========="
@@ -90,9 +96,12 @@ object_storage_init() {
   fi
   cp "./${OSS_SERVICE_DIR}/docker-compose.yml" "$COMPOSE_DIR"
   cp "./${OSS_SERVICE_DIR}/upgrade.sh" "$COMPOSE_DIR"
-  write_runtime_env "$COMPOSE_DIR" storage
+  install_write_service_env "$COMPOSE_DIR" storage
+  install_copy_env_tool "$COMPOSE_DIR"
 
-  cd "$COMPOSE_DIR" && docker compose up -d
+  cd "$COMPOSE_DIR"
+  docker compose --project-directory "$COMPOSE_DIR" --env-file "$COMPOSE_DIR/.env" -f "$COMPOSE_DIR/docker-compose.yml" config -q
+  docker compose --project-directory "$COMPOSE_DIR" --env-file "$COMPOSE_DIR/.env" -f "$COMPOSE_DIR/docker-compose.yml" up -d
   if ! wait_for_storage_health "$container_name"; then
     echo "${OSS_PROVIDER} 未达到健康状态，初始化未完成" >&2
     return 1

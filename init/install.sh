@@ -3,18 +3,18 @@
 set -euo pipefail
 
 ENTRY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="${ENV_FILE:-$ENTRY_DIR/.env}"
-if [ -f "$ENV_FILE" ]; then
-  ENV_FILE="$(cd "$(dirname "$ENV_FILE")" && pwd)/$(basename "$ENV_FILE")"
+INSTALL_ENV_FILE="${INSTALL_ENV_FILE:-$ENTRY_DIR/.env}"
+if [ -f "$INSTALL_ENV_FILE" ]; then
+  INSTALL_ENV_FILE="$(cd "$(dirname "$INSTALL_ENV_FILE")" && pwd)/$(basename "$INSTALL_ENV_FILE")"
   set -a
   # shellcheck disable=SC1091
-  . "$ENV_FILE"
+  . "$INSTALL_ENV_FILE"
   set +a
 else
-  echo "安装配置不存在：$ENV_FILE" >&2
+  echo "安装配置不存在：$INSTALL_ENV_FILE" >&2
   exit 1
 fi
-export ENV_FILE
+unset ENV_FILE DEPLOY_ENV_FILE
 cd "$ENTRY_DIR"
 
 SERVICE_DIR="${SCRIPT_DIR:-sz-deploy}"
@@ -77,11 +77,15 @@ install_service() {
   fi
 
   cd "$SERVICE_DIR"
+  . ./scripts/install-config.sh
+  install_resolve_config
+  # 入口只传递已解析值，子脚本没有安装文件访问路径。
+  export -n INSTALL_ENV_FILE
+  log "WARN" "真实部署前必须更换默认账号密码；后续运维仅使用 $DEPLOY_ROOT 下的运行配置"
   bash ./sz-base.sh
   bash ./sz-service.sh
   cd "$CURRENT_DIR"
-#  sudo rm -rf "$SERVICE_DIR"
-#  log "INFO" "清理完成"
+  log "INFO" "安装验收和服务器外恢复备份完成后，可人工删除安装入口、输入和源码"
 }
 
 main() {

@@ -20,37 +20,48 @@ step() {
   log "[步骤 ${STEP_NO}] $*"
 }
 
-if [ -f .env ]; then
-  source .env
-else
-  err "未找到 .env"
-  exit 1
-fi
-
-REQUIRED_VARS=(IMAGE_NAME NETWORK_NAME NGINX_CONTAINER COMPOSE_FILE HEALTH_PORT GREEN_NAME BLUE_NAME STATE_FILE UPSTREAM_FILE)
-for v in "${REQUIRED_VARS[@]}"; do
-  if [ -z "${!v:-}" ]; then
-    err "缺少变量: $v"
-    exit 1
-  fi
+. ./runtime-config.sh
+bg_read_config "$PWD/.env"
+NO_PRUNE=false
+INHERITED_LOCK_FD=''
+while (( $# )); do
+  case "$1" in
+    --no-prune) NO_PRUNE=true; shift ;;
+    --lock-fd) [[ $# -ge 2 && -z "$INHERITED_LOCK_FD" ]] || exit 2; INHERITED_LOCK_FD="$2"; shift 2 ;;
+    *) err '未知部署参数'; exit 2 ;;
+  esac
 done
+bg_lock "$INHERITED_LOCK_FD"
+[[ -f "$COMPOSE_FILE" && ! -L "$COMPOSE_FILE" ]] || { err '缺少生成配置，请先执行 gen-conf.sh'; exit 1; }
+bg_render_compose | cmp -s "$COMPOSE_FILE" - || { err '运行配置与生成文件不一致，请先执行 gen-conf.sh'; exit 1; }
+docker compose --project-directory "$PWD" --env-file "$PWD/.env" -f "$PWD/$COMPOSE_FILE" config -q
+compose() { docker compose --project-directory "$PWD" --env-file "$PWD/.env" -f "$PWD/$COMPOSE_FILE" "$@"; }
 
-HEALTH_RETRY="${HEALTH_RETRY:-60}"
-HEALTH_INTERVAL="${HEALTH_INTERVAL:-2}"
-SPRINGBOOT_LOG_TAIL="${SPRINGBOOT_LOG_TAIL:-100}"
-SPRINGBOOT_LOG_TAIL_HEALTH="${SPRINGBOOT_LOG_TAIL_HEALTH:-10}"
-PRINT_SPRINGBOOT_LOG="${PRINT_SPRINGBOOT_LOG:-true}"
-NGINX_GRACE_PERIOD="${NGINX_GRACE_PERIOD:-5}" # 切换后等待秒数
-IMAGE_PULL="${IMAGE_PULL:-false}"
-PRUNE_IMAGES="${PRUNE_IMAGES:-false}"
-RESOURCE_DATA_DIR="${RESOURCE_DATA_DIR:-/home/data/sz-resource}"
+# 缺少容器返回2；已有容器必须属于当前运行目录和同名Compose服务。
+managed_container_id() {
+  local name="$1" metadata identity owner service
+  metadata="$(docker inspect --format '{{.Id}}|{{index .Config.Labels "com.docker.compose.project.working_dir"}}|{{index .Config.Labels "com.docker.compose.service"}}' "$name" 2>/dev/null)" || return 2
+  IFS='|' read -r identity owner service <<< "$metadata"
+  [[ -n "$identity" && "$owner" == "$PWD" && "$service" == "$name" ]] || {
+    err "容器 $name 归属不明，保留现场并停止"; return 1;
+  }
+  printf '%s\n' "$identity"
+}
 
-LOCK_FILE="${LOCK_FILE:-deploy.lock}"
-exec 9>"$LOCK_FILE"
-if ! flock -n 9; then
-  err "已有部署在进行，取消本次部署"
-  exit 1
-fi
+remove_managed_container() {
+  local identity status
+  if identity="$(managed_container_id "$1")"; then
+    # 用已核验的不可变ID删除，避免名称被并发替换后误删其他容器。
+    docker rm -f "$identity" >/dev/null 2>&1 || return 1
+  else
+    status=$?; [[ "$status" == 2 ]] || return 1
+  fi
+}
+
+for managed_name in "$NGINX_CONTAINER" "$GREEN_NAME" "$BLUE_NAME"; do
+  if managed_container_id "$managed_name" >/dev/null; then :
+  else managed_status=$?; [[ "$managed_status" == 2 ]] || exit 1; fi
+done
 
 SPRINGBOOT_LOG_PID=""
 
@@ -89,7 +100,28 @@ stop_springboot_log_follow() {
   fi
 }
 
-trap 'stop_springboot_log_follow' EXIT
+DEPLOY_COMMITTED=false
+DEPLOY_BACKUP="$(mktemp -d "$PWD/.deploy-backup.XXXXXX")"
+chmod 700 "$DEPLOY_BACKUP"
+[[ ! -L "$UPSTREAM_FILE" && ! -L "$STATE_FILE" ]] || { err '状态文件不得为符号链接'; exit 1; }
+if [[ -f "$UPSTREAM_FILE" ]]; then cp -p "$UPSTREAM_FILE" "$DEPLOY_BACKUP/upstream"; fi
+if [[ -f "$STATE_FILE" ]]; then cp -p "$STATE_FILE" "$DEPLOY_BACKUP/state"; fi
+deployment_exit() {
+  local result=$?
+  trap - EXIT
+  stop_springboot_log_follow
+  if [[ "$result" != 0 && "$DEPLOY_COMMITTED" == false ]]; then
+    err "部署失败，恢复原 upstream 和 active 状态；备份: $DEPLOY_BACKUP"
+    if [[ -f "$DEPLOY_BACKUP/upstream" ]]; then cp -p "$DEPLOY_BACKUP/upstream" "$UPSTREAM_FILE" || result=1; else rm -f "$UPSTREAM_FILE"; fi
+    if [[ -f "$DEPLOY_BACKUP/state" ]]; then cp -p "$DEPLOY_BACKUP/state" "$STATE_FILE" || result=1; else rm -f "$STATE_FILE"; fi
+    if [[ -f "$DEPLOY_BACKUP/upstream" ]]; then
+      docker exec "$NGINX_CONTAINER" nginx -t && docker exec "$NGINX_CONTAINER" nginx -s reload \
+        || err '恢复配置后的 Nginx reload 失败，请检查保留的备份'
+    fi
+  fi
+  exit "$result"
+}
+trap deployment_exit EXIT
 
 health_check() {
   local cname="$1"
@@ -129,9 +161,9 @@ wait_nginx_healthy() {
 }
 
 ensure_network() {
-  if ! docker network ls | grep -q "$NETWORK_NAME"; then
-    log "创建网络: $NETWORK_NAME"
-    docker network create "$NETWORK_NAME"
+  if ! docker network inspect "$DOCKER_NETWORK_NAME" >/dev/null 2>&1; then
+    log "创建网络: $DOCKER_NETWORK_NAME"
+    docker network create "$DOCKER_NETWORK_NAME"
   fi
 }
 
@@ -144,7 +176,11 @@ get_active_slot() {
 }
 
 set_active_slot() {
-  echo "ACTIVE_SLOT=$1" > "$STATE_FILE"
+  local tmp
+  tmp="$(mktemp "${STATE_FILE}.XXXXXX")" || return 1
+  printf 'ACTIVE_SLOT=%s\n' "$1" > "$tmp"
+  if [[ -f "$STATE_FILE" ]]; then chown --reference="$STATE_FILE" "$tmp" && chmod --reference="$STATE_FILE" "$tmp" || return 1; fi
+  mv "$tmp" "$STATE_FILE"
 }
 
 slot_name_to_container() {
@@ -161,9 +197,9 @@ start_slot() {
   local cname
   cname=$(slot_name_to_container "$slot")
   log "准备启动容器: $cname"
-  docker rm -f "$cname" >/dev/null 2>&1 || true
+  remove_managed_container "$cname" || return 1
   log "执行: docker compose -f $COMPOSE_FILE up -d $cname"
-  docker compose -f "$COMPOSE_FILE" up -d "$cname"
+  compose up -d "$cname" || return 1
   log "容器 $cname 启动命令已执行，等待健康检查..."
   start_springboot_log_follow "$cname"
   if ! health_check "$cname"; then
@@ -171,7 +207,7 @@ start_slot() {
     err "❌ $cname 未通过健康检查，移除"
     log "$cname 失败日志摘要（最后 ${SPRINGBOOT_LOG_TAIL} 行）："
     docker logs --tail "$SPRINGBOOT_LOG_TAIL" "$cname" 2>&1 || true
-    docker rm -f "$cname" >/dev/null 2>&1 || true
+    remove_managed_container "$cname" || return 1
     return 1
   fi
   stop_springboot_log_follow "$cname"
@@ -222,7 +258,7 @@ reload_nginx() {
     return 1
   }
   log "Nginx 语法检查通过，执行 reload..."
-  docker exec "$NGINX_CONTAINER" nginx -s reload
+  docker exec "$NGINX_CONTAINER" nginx -s reload || return 1
   log "Nginx reload 完成"
 }
 
@@ -232,7 +268,7 @@ remove_slot() {
   cname=$(slot_name_to_container "$slot")
   if docker ps -a --format '{{.Names}}' | grep -q "^${cname}$"; then
     log "下线旧容器: $cname"
-    docker rm -f "$cname" >/dev/null 2>&1 || true
+    remove_managed_container "$cname" || return 1
   fi
 }
 
@@ -264,11 +300,15 @@ wait_any_slot_healthy() {
 }
 
 mkdir -p "$RESOURCE_DATA_DIR"
+mkdir -p "$NGINX_UPSTREAMS" "$NGINX_CONF_D" "$(dirname "$UPSTREAM_FILE")"
+if [[ ! -f "$UPSTREAM_FILE" ]]; then
+  printf '# 初始化占位，首次健康后写入槽位\n' > "$UPSTREAM_FILE"
+fi
 
 step "准备后台镜像"
 if [ "$IMAGE_PULL" = "true" ]; then
-  log "拉取镜像: $IMAGE_NAME"
-  docker pull "$IMAGE_NAME"
+  log "拉取后台镜像"
+  docker pull "$SZ_SERVICE_ADMIN_IMAGE"
 else
   log "IMAGE_PULL=$IMAGE_PULL，跳过镜像拉取"
 fi
@@ -279,7 +319,7 @@ step "检查内部 Nginx"
 if ! docker ps -a --format '{{.Names}}' | grep -q "^${NGINX_CONTAINER}$"; then
   log "准备启动 Nginx 服务容器: $NGINX_CONTAINER"
   log "执行: docker compose -f $COMPOSE_FILE up -d $NGINX_CONTAINER"
-  docker compose -f "$COMPOSE_FILE" up -d "$NGINX_CONTAINER"
+  compose up -d "$NGINX_CONTAINER"
   log "Nginx 容器启动命令已执行，等待健康检查..."
   if ! wait_nginx_healthy; then
     err "Nginx 容器启动未健康，请排查"
@@ -289,6 +329,7 @@ if ! docker ps -a --format '{{.Names}}' | grep -q "^${NGINX_CONTAINER}$"; then
 fi
 
 ACTIVE_SLOT=$(get_active_slot)
+case "$ACTIVE_SLOT" in ''|green|blue) ;; *) err '无效 active 槽位状态'; exit 1 ;; esac
 GREEN_EXISTS=false
 BLUE_EXISTS=false
 docker ps -a --format '{{.Names}}' | grep -q "^${GREEN_NAME}$" && GREEN_EXISTS=true
@@ -309,6 +350,7 @@ if [ -z "$ACTIVE_SLOT" ]; then
       exit 1
     fi
     set_active_slot "green"
+    DEPLOY_COMMITTED=true
     log "✅ 首次部署完成，active=green"
     exit 0
   else
@@ -365,12 +407,13 @@ if ! reload_nginx; then
 fi
 log "流量已完全切到: $NEW_SLOT"
 
-remove_slot "$ACTIVE_SLOT"
 step "保存 active 槽位状态"
 set_active_slot "$NEW_SLOT"
+DEPLOY_COMMITTED=true
+remove_slot "$ACTIVE_SLOT"
 log "✅ 部署完成，新 active: $NEW_SLOT"
 
-if [ "$PRUNE_IMAGES" = "true" ]; then
+if [[ "$PRUNE_IMAGES" == true && "$NO_PRUNE" == false ]]; then
   log "清理悬虚镜像"
-  sudo docker image prune -f
+  docker image prune -f
 fi

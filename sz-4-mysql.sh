@@ -18,25 +18,34 @@ error_handler() {
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/deploy-common.sh
-. "$SCRIPT_DIR/scripts/deploy-common.sh"
-load_deploy_env
+# shellcheck source=scripts/install-config.sh
+. "$SCRIPT_DIR/scripts/install-config.sh"
+install_require_context
+cd "$SCRIPT_DIR"
 
-COMPOSE_DIR=/home/docker-compose/mysql
+COMPOSE_DIR="$DEPLOY_ROOT/mysql"
 CURRENT_DIR=$(pwd)
 
 log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$type] $msg"; }
 
 mysql_init() {
+  if [[ -e "$COMPOSE_DIR/.env" ]]; then
+    [[ -f "$COMPOSE_DIR/.env" && ! -L "$COMPOSE_DIR/.env" ]] || return 1
+    log "INFO" "运行配置已存在，保留现场文件与容器；请使用运行目录 upgrade.sh"
+    return 0
+  fi
   log "INFO" "==========MySQL 初始化=========="
   mkdir -p "${COMPOSE_DIR}"
   cp ./mysql/my.cnf "${COMPOSE_DIR}"
   cp ./mysql/docker-compose.yml "${COMPOSE_DIR}"
   cp ./mysql/backup.sh "${COMPOSE_DIR}"
   cp ./mysql/upgrade.sh "${COMPOSE_DIR}"
-  write_runtime_env "${COMPOSE_DIR}" mysql
+  install_write_service_env "${COMPOSE_DIR}" mysql
+  install_copy_env_tool "$COMPOSE_DIR"
 
-  cd "${COMPOSE_DIR}" && docker compose up -d
+  cd "$COMPOSE_DIR"
+  docker compose --project-directory "$COMPOSE_DIR" --env-file "$COMPOSE_DIR/.env" -f "$COMPOSE_DIR/docker-compose.yml" config -q
+  docker compose --project-directory "$COMPOSE_DIR" --env-file "$COMPOSE_DIR/.env" -f "$COMPOSE_DIR/docker-compose.yml" up -d
 
   log "INFO" "MySQL 初始化完成"
   cd "$CURRENT_DIR"

@@ -19,12 +19,13 @@ error_handler() {
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/deploy-common.sh
-. "$SCRIPT_DIR/scripts/deploy-common.sh"
-load_deploy_env
+# shellcheck source=scripts/install-config.sh
+. "$SCRIPT_DIR/scripts/install-config.sh"
+install_require_context
+cd "$SCRIPT_DIR"
 
 SERVICE_NAME=sz-service-admin
-COMPOSE_DIR=/home/docker-compose/sz-service-admin
+COMPOSE_DIR="$DEPLOY_ROOT/sz-service-admin"
 CURRENT_DIR=$(pwd)   # 记录当前路径
 
 # 数据库类型：mysql | postgresql（默认 mysql）
@@ -122,16 +123,24 @@ create_database() {
 }
 
 service_init() {
+  if [[ -e "$COMPOSE_DIR/.env" ]]; then
+    [[ -f "$COMPOSE_DIR/.env" && ! -L "$COMPOSE_DIR/.env" ]] || return 1
+    if [[ "${USE_BLUE_GREEN_DEPLOY:-false}" == true ]]; then
+      [[ -f "$COMPOSE_DIR/deploy.sh" && ! -e "$COMPOSE_DIR/docker-compose.yml" ]] || {
+        log "ERROR" "运行模式不匹配，安装入口不会转换已有普通环境"; return 1;
+      }
+      install_init_blue_green_env "$COMPOSE_DIR" "$SCRIPT_DIR/$SERVICE_NAME/blue-green/.env.defaults"
+    else
+      [[ -f "$COMPOSE_DIR/docker-compose.yml" && ! -e "$COMPOSE_DIR/deploy.sh" ]] || {
+        log "ERROR" "运行模式不匹配，安装入口不会转换已有蓝绿环境"; return 1;
+      }
+    fi
+    log "INFO" "运行配置已存在，保留现场文件与容器；后续请使用运行目录运维入口"
+    return 0
+  fi
   log "INFO" "==========[$SERVICE_NAME] 初始化=========="
   log "INFO" "当前数据库类型：$DB_TYPE"
 
-  if [[ "$DB_TYPE" == "postgresql" && -f /home/docker-compose/postgres/.env ]]; then
-    load_env_file /home/docker-compose/postgres/.env
-    PG_CONTAINER_NAME="${PG_CONTAINER_NAME:-postgres18}"
-    PG_DB_NAME="${PG_DB_NAME:-sz_admin_prod}"
-    PG_SUPER_USER="${PG_SUPER_USER:-postgres}"
-    PG_SUPER_PASSWORD="${PG_SUPER_PASSWORD:-ChangeMe_Strong_Postgres_Password}"
-  fi
 
   # 根据数据库类型执行对应的就绪检查
   if [[ "$DB_TYPE" == "postgresql" ]]; then
@@ -145,33 +154,26 @@ service_init() {
     # MySQL：等待连接并建库
     if check_mysql_connection; then
       create_database
+    else
+      log "ERROR" "MySQL 未就绪，中止后台初始化"
+      return 1
     fi
   fi
 
-  mkdir -p "$COMPOSE_DIR"/config/prod
+  install_init_profile "$COMPOSE_DIR" "$SCRIPT_DIR/$SERVICE_NAME/config"
   mkdir -p "$RESOURCE_DATA_DIR"
-  cp ./"$SERVICE_NAME"/config/* "$COMPOSE_DIR"/config/prod
-  if [[ -n "${RESOURCE_CONFIG_FILE:-}" ]]; then
-    [[ -f "$RESOURCE_CONFIG_FILE" ]] || { echo "资源配置文件不存在：$RESOURCE_CONFIG_FILE" >&2; return 1; }
-    cp "$RESOURCE_CONFIG_FILE" "$COMPOSE_DIR/config/prod/oss.yml"
-  fi
+  install_copy_env_tool "$COMPOSE_DIR"
   if [[ "${USE_BLUE_GREEN_DEPLOY:-false}" == "true" ]]; then
     log "INFO" "[$SERVICE_NAME] 使用蓝绿部署模式"
     mkdir -p "$COMPOSE_DIR"/nginx
-    cp ./"$SERVICE_NAME"/blue-green/.env "$COMPOSE_DIR"
+    install_init_blue_green_env "$COMPOSE_DIR" "$SCRIPT_DIR/$SERVICE_NAME/blue-green/.env.defaults"
+    cp ./"$SERVICE_NAME"/blue-green/.env.defaults "$COMPOSE_DIR"
+    cp ./"$SERVICE_NAME"/blue-green/runtime-config.sh "$COMPOSE_DIR"
+    cp ./"$SERVICE_NAME"/blue-green/migrate-env.sh "$COMPOSE_DIR"
     cp ./"$SERVICE_NAME"/blue-green/deploy.sh "$COMPOSE_DIR"
     cp ./"$SERVICE_NAME"/blue-green/docker-compose.yml.template "$COMPOSE_DIR"
     cp ./"$SERVICE_NAME"/blue-green/gen-conf.sh "$COMPOSE_DIR"
-    cp ./"$SERVICE_NAME"/blue-green/nginx/nginx.conf "$COMPOSE_DIR"/nginx
-    upsert_env_value "$COMPOSE_DIR/.env" "DB_TYPE" "$DB_TYPE"
-    upsert_env_value "$COMPOSE_DIR/.env" "IMAGE_NAME" "$SZ_SERVICE_ADMIN_IMAGE"
-    upsert_env_value "$COMPOSE_DIR/.env" "IMAGE_NAME_NGINX" "$NGINX_IMAGE"
-    upsert_env_value "$COMPOSE_DIR/.env" "SPRING_ACTIVE" "$SPRING_PROFILES_ACTIVE"
-    upsert_env_value "$COMPOSE_DIR/.env" "NETWORK_NAME" "$DOCKER_NETWORK_NAME"
-    upsert_env_value "$COMPOSE_DIR/.env" "RESOURCE_DATA_DIR" "$RESOURCE_DATA_DIR"
-    upsert_env_value "$COMPOSE_DIR/.env" "IMAGE_PULL" "$IMAGE_PULL"
-    upsert_env_value "$COMPOSE_DIR/.env" "PRUNE_IMAGES" "$PRUNE_IMAGES"
-    upsert_env_value "$COMPOSE_DIR/.env" "PKG_MGR" "$PKG_MGR"
+    [[ -e "$COMPOSE_DIR/nginx/nginx.conf" ]] || cp ./"$SERVICE_NAME"/blue-green/nginx/nginx.conf "$COMPOSE_DIR"/nginx
     chmod +x "$COMPOSE_DIR"/gen-conf.sh
     chmod +x "$COMPOSE_DIR"/deploy.sh
 
@@ -185,9 +187,12 @@ service_init() {
     log "INFO" "[$SERVICE_NAME] 使用普通部署模式"
     cp ./"$SERVICE_NAME"/docker-compose.yml "$COMPOSE_DIR"
     cp ./"$SERVICE_NAME"/upgrade.sh "$COMPOSE_DIR"
-    write_runtime_env "$COMPOSE_DIR" admin
+    install_write_service_env "$COMPOSE_DIR" admin
+    install_copy_env_tool "$COMPOSE_DIR"
     chmod +x "$COMPOSE_DIR"/upgrade.sh
-    cd "$COMPOSE_DIR" && docker compose up -d
+    cd "$COMPOSE_DIR"
+    docker compose --project-directory "$COMPOSE_DIR" --env-file "$COMPOSE_DIR/.env" -f "$COMPOSE_DIR/docker-compose.yml" config -q
+    docker compose --project-directory "$COMPOSE_DIR" --env-file "$COMPOSE_DIR/.env" -f "$COMPOSE_DIR/docker-compose.yml" up -d
   fi
   log "INFO" "[$SERVICE_NAME] 初始化完成"
   cd "$CURRENT_DIR"

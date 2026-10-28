@@ -22,10 +22,17 @@ log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$
 
 # ── 载入 .env ──────────────────────────────────────────────────────────────
 if [ -f .env ]; then
-  set -a
-  # shellcheck disable=SC1091
-  . ./.env
-  set +a
+  . ./lib/env-file.sh
+  for runtime_key in DOCKER_NETWORK_NAME PG_MODE PG_PORT PG_CONTAINER_NAME PG_IMAGE PG_SUPER_USER PG_SUPER_PASSWORD PG_DB_NAME PG_INTERNAL_USER PG_INTERNAL_PASSWORD PG_EXTERNAL_USER PG_EXTERNAL_PASSWORD PG_EXTERNAL_CIDR PG_INTERNAL_SUBNET; do
+    unset "$runtime_key"
+    if env_file_read .env "$runtime_key" runtime_value; then
+      printf -v "$runtime_key" '%s' "$runtime_value"
+      export "$runtime_key"
+    else
+      status=$?
+      [[ "$status" == 2 ]] || exit "$status"
+    fi
+  done
 else
   log "ERROR" ".env 文件不存在，请先从 .env.example 复制并填写配置"
   exit 1
@@ -49,8 +56,8 @@ if ! command -v docker &>/dev/null; then
 fi
 
 if ! command -v envsubst &>/dev/null; then
-  log "INFO" "envsubst 未找到，正在安装 gettext..."
-  sudo "${PKG_MGR:-dnf}" install -y gettext
+  log "ERROR" "envsubst 不可用，请在运维前准备 gettext；运行脚本不安装软件"
+  exit 1
 fi
 
 if ! docker network ls | grep -w "$DOCKER_NETWORK_NAME" &>/dev/null; then
@@ -138,6 +145,7 @@ envsubst '${PG_DB_NAME}${PG_INTERNAL_USER}${PG_INTERNAL_PASSWORD}${PG_EXTERNAL_U
   < ./initdb/01-init-users.sql.template > ./config/initdb/01-init-users.sql
 
 log "INFO" "initdb SQL 生成完成"
+
 # 官方 PostgreSQL 18 镜像以 UID/GID 999 读取这些 bind 挂载；
 # 显式设置生成物权限，不依赖调用者 umask，也不递归修改其他配置。
 chown 999:999 -- config config/initdb \

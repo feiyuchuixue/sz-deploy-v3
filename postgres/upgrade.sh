@@ -1,26 +1,42 @@
 #!/bin/bash
-
 set -euo pipefail
-
-if [ -f .env ]; then
-  set -a
-  # shellcheck disable=SC1091
-  . ./.env
-  set +a
+RUN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$RUN_DIR"
+[[ -f .env && -f lib/env-file.sh ]] || { printf '运行目录缺少 .env 或 lib/env-file.sh，请先按升级指南更新运行包\n' >&2; exit 1; }
+. ./lib/env-file.sh
+unset COMPOSE_PROJECT_NAME
+if env_file_read .env COMPOSE_PROJECT_NAME runtime_value; then
+  [[ "$runtime_value" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || exit 1
+  export COMPOSE_PROJECT_NAME="$runtime_value"
+else
+  status=$?
+  [[ "$status" == 2 ]] || exit "$status"
 fi
+for runtime_key in DOCKER_NETWORK_NAME IMAGE_PULL PRUNE_IMAGES PG_IMAGE PG_CONTAINER_NAME PG_MODE PG_PORT PG_SUPER_USER PG_SUPER_PASSWORD PG_DB_NAME PG_INTERNAL_USER PG_INTERNAL_PASSWORD PG_EXTERNAL_USER PG_EXTERNAL_PASSWORD PG_EXTERNAL_CIDR PG_INTERNAL_SUBNET BACKUP_ENABLED BACKUP_RETENTION_DAYS POSTGRES_BACKUP_ROOT; do
+  unset "$runtime_key"
+  if env_file_read .env "$runtime_key" runtime_value; then
+    printf -v "$runtime_key" '%s' "$runtime_value"
+    export "$runtime_key"
+  else
+    status=$?
+    [[ "$status" == 2 ]] || exit "$status"
+  fi
+done
+docker compose --project-directory "$RUN_DIR" --env-file "$RUN_DIR/.env" -f "$RUN_DIR/docker-compose.yml" config -q
+
 
 echo "==================== 停止旧 PostgreSQL 容器 ===================="
-sudo docker compose down || true
+sudo docker compose --project-directory "$RUN_DIR" --env-file "$RUN_DIR/.env" -f "$RUN_DIR/docker-compose.yml" down || true
 
 if [ "${IMAGE_PULL:-false}" = "true" ]; then
   echo "==================== 重新拉取镜像 ===================="
-  sudo docker compose pull
+  sudo docker compose --project-directory "$RUN_DIR" --env-file "$RUN_DIR/.env" -f "$RUN_DIR/docker-compose.yml" pull
 else
   echo "==================== IMAGE_PULL=${IMAGE_PULL:-false}，跳过镜像拉取 ===================="
 fi
 
 echo "==================== 启动 PostgreSQL 容器 ======================"
-sudo docker compose up -d
+sudo docker compose --project-directory "$RUN_DIR" --env-file "$RUN_DIR/.env" -f "$RUN_DIR/docker-compose.yml" up -d
 
 if [ "${PRUNE_IMAGES:-false}" = "true" ]; then
   echo "==================== 清理悬虚镜像 ======================"

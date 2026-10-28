@@ -1,34 +1,42 @@
 #!/bin/bash
-
 set -euo pipefail
-
-if [ -f .env ]; then
-  set -a
-  # shellcheck disable=SC1091
-  . ./.env
-  set +a
+RUN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$RUN_DIR"
+[[ -f .env && -f lib/env-file.sh ]] || { printf '运行目录缺少 .env 或 lib/env-file.sh，请先按升级指南更新运行包\n' >&2; exit 1; }
+. ./lib/env-file.sh
+unset COMPOSE_PROJECT_NAME
+if env_file_read .env COMPOSE_PROJECT_NAME runtime_value; then
+  [[ "$runtime_value" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || exit 1
+  export COMPOSE_PROJECT_NAME="$runtime_value"
+else
+  status=$?
+  [[ "$status" == 2 ]] || exit "$status"
 fi
+for runtime_key in DOCKER_NETWORK_NAME IMAGE_PULL PRUNE_IMAGES RUSTFS_IMAGE RUSTFS_CONTAINER OSS_API_PORT OSS_CONSOLE_PORT OSS_ACCESS_KEY OSS_SECRET_KEY OSS_REGION OSS_SERVER_DOMAINS RUSTFS_SERVER_DOMAINS; do
+  unset "$runtime_key"
+  if env_file_read .env "$runtime_key" runtime_value; then
+    printf -v "$runtime_key" '%s' "$runtime_value"
+    export "$runtime_key"
+  else
+    status=$?
+    [[ "$status" == 2 ]] || exit "$status"
+  fi
+done
+docker compose --project-directory "$RUN_DIR" --env-file "$RUN_DIR/.env" -f "$RUN_DIR/docker-compose.yml" config -q
+
 
 unset RUSTFS_SERVER_DOMAINS
 if [[ -n "${OSS_SERVER_DOMAINS:-}" ]]; then
   export RUSTFS_SERVER_DOMAINS="$OSS_SERVER_DOMAINS"
 fi
-# sudo 可能过滤 shell 导出的变量；同步派生值，让 Compose 重启/升级读取一致配置。
-if [ -f .env ]; then
-  if [[ "${OSS_SERVER_DOMAINS:-}" == *"'"* || "${OSS_SERVER_DOMAINS:-}" == *$'\n'* || "${OSS_SERVER_DOMAINS:-}" == *$'\r'* ]]; then
-    echo "OSS_SERVER_DOMAINS 包含不支持的字符" >&2
-    exit 1
-  fi
-  domains_env="$(mktemp ./.env.domains.XXXXXX)"
-  awk '!/^RUSTFS_SERVER_DOMAINS=/' .env > "$domains_env"
-  if [[ -n "${OSS_SERVER_DOMAINS:-}" ]]; then
-    printf "RUSTFS_SERVER_DOMAINS='%s'\n" "$OSS_SERVER_DOMAINS" >> "$domains_env"
-  fi
-  chmod --reference=.env "$domains_env"
-  mv "$domains_env" .env
+# 将派生域名持久化为字面值；空值时省略 RustFS CLI 参数。
+if [[ -n "${OSS_SERVER_DOMAINS:-}" ]]; then
+  env_file_set .env RUSTFS_SERVER_DOMAINS "$OSS_SERVER_DOMAINS"
+else
+  env_file_remove .env RUSTFS_SERVER_DOMAINS
 fi
 
-CONTAINER_NAME="rustfs"
+CONTAINER_NAME="${RUSTFS_CONTAINER:-rustfs}"
 HEALTH_TIMEOUT_SECONDS=150
 
 wait_for_health() {
@@ -58,16 +66,16 @@ wait_for_health() {
 
 if [ "${IMAGE_PULL:-false}" = "true" ]; then
   echo "==================== 拉取 RustFS 镜像 ===================="
-  sudo docker compose pull
+  sudo docker compose --project-directory "$RUN_DIR" --env-file "$RUN_DIR/.env" -f "$RUN_DIR/docker-compose.yml" pull
 else
   echo "==================== IMAGE_PULL=${IMAGE_PULL:-false}，跳过镜像拉取 ===================="
 fi
 
 echo "==================== 停止旧 RustFS 容器 ===================="
-sudo docker compose down || true
+sudo docker compose --project-directory "$RUN_DIR" --env-file "$RUN_DIR/.env" -f "$RUN_DIR/docker-compose.yml" down || true
 
 echo "==================== 启动 RustFS 容器 ======================"
-if ! sudo docker compose up -d; then
+if ! sudo docker compose --project-directory "$RUN_DIR" --env-file "$RUN_DIR/.env" -f "$RUN_DIR/docker-compose.yml" up -d; then
   echo "RustFS 启动失败，请检查镜像、配置和挂载目录后人工处理" >&2
   exit 1
 fi

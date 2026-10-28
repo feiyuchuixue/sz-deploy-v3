@@ -20,9 +20,10 @@ error_handler() {
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/deploy-common.sh
-. "$SCRIPT_DIR/scripts/deploy-common.sh"
-load_deploy_env
+# shellcheck source=scripts/install-config.sh
+. "$SCRIPT_DIR/scripts/install-config.sh"
+install_require_context
+cd "$SCRIPT_DIR"
 
 # 日志函数
 log() {
@@ -33,6 +34,7 @@ log() {
 
 main() {
   log "INFO" "**********开始安装应用服务**********"
+  install_copy_ops "$DEPLOY_ROOT"
   bash ./sz-101-sz-service-admin.sh
   bash ./sz-102-sz-service-websocket.sh
   bash ./sz-105-nginx-static.sh
@@ -43,10 +45,10 @@ main() {
   log "INFO" "Docker Network [$DOCKER_NETWORK_NAME] 应用服务信息："
   docker network inspect "$DOCKER_NETWORK_NAME"
   echo "============================================================"
-  echo "Nginx Proxy Manager 初始配置地址: http://<服务器IP>:81"
-  echo "  默认账号/密码: admin@example.com / changeme"
+  echo "Nginx Proxy Manager 初始配置宿主端口: ${NPM_ADMIN_PORT}"
+  echo "  请使用运行配置中的管理账号并及时更换默认密码"
   echo "------------------------------------------------------------"
-  echo "${OSS_PROVIDER} 控制台地址: http://<服务器IP>:9001"
+  echo "${OSS_PROVIDER} 控制台宿主端口: ${OSS_CONSOLE_PORT}"
   echo "  账号与密码：使用安装配置中的 OSS_ACCESS_KEY / OSS_SECRET_KEY"
   echo "  应用 endpoint、bucket、domain 和资源场景请在 config/<profile>/oss.yml 中配置。"
   echo "============================================================"

@@ -18,9 +18,10 @@ error_handler() {
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/deploy-common.sh
-. "$SCRIPT_DIR/scripts/deploy-common.sh"
-load_deploy_env
+# shellcheck source=scripts/install-config.sh
+. "$SCRIPT_DIR/scripts/install-config.sh"
+install_require_context
+cd "$SCRIPT_DIR"
 
 CURRENT_DIR=$(pwd)
 
@@ -68,6 +69,10 @@ install_docker() {
      # 打印版本
      docker-compose --version
      log "INFO" "Docker Compose 安装完成"
+  fi
+
+  if ! command -v envsubst >/dev/null 2>&1; then
+    sudo "$PKG_MGR" install -y gettext
   fi
 
   # 创建指定的docker 网络
