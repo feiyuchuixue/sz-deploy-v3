@@ -17,9 +17,6 @@ REQUIRED_VARS=(
   IMAGE_NAME_NGINX
   DB_TYPE
   SPRING_ACTIVE
-  PAGE_HELPER_DIALECT
-  PG_INTERNAL_USER
-  PG_INTERNAL_PASSWORD
   NETWORK_NAME
   HEALTH_PORT
   ACTUATOR_PATH
@@ -47,4 +44,6 @@ if [ ! -f "${NGINX_UPSTREAMS}/app_backend.conf" ]; then
   echo "# 初始化占位，deploy.sh 会自动重写" > "${NGINX_UPSTREAMS}/app_backend.conf"
 fi
 
-envsubst < docker-compose.yml.template > docker-compose.gen.yml
+# 只渲染部署拓扑；业务配置由挂载到 /config 的 profile YAML 管理。
+envsubst '${IMAGE_NAME} ${IMAGE_NAME_NGINX} ${NETWORK_NAME} ${NGINX_PORT} ${NGINX_CONF} ${NGINX_UPSTREAMS} ${NGINX_CONF_D} ${RESOURCE_DATA_DIR} ${HEALTH_PORT} ${ACTUATOR_PATH}' \
+  < docker-compose.yml.template > docker-compose.gen.yml

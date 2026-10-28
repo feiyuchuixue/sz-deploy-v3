@@ -35,21 +35,31 @@ log() {
 }
 
 service_init() {
+  local selected_conf inactive_conf
   log "INFO" "==========[$SERVICE_NAME] 初始化=========="
   mkdir -p "$COMPOSE_DIR"/conf.d
   cp ./"$SERVICE_NAME"/docker-compose.yml "$COMPOSE_DIR"
   cp ./"$SERVICE_NAME"/upgrade.sh "$COMPOSE_DIR"
-  write_runtime_env "$COMPOSE_DIR"
+  write_runtime_env "$COMPOSE_DIR" frontend
   chmod +x "$COMPOSE_DIR"/upgrade.sh
   if [[ "${USE_BLUE_GREEN_DEPLOY:-false}" == "true" ]]; then
     log "INFO" "[$SERVICE_NAME] 使用蓝绿部署模式"
-    cp ./"$SERVICE_NAME"/conf.d/default-blue-green.conf "$COMPOSE_DIR"/conf.d
+    selected_conf=default-blue-green.conf
+    inactive_conf=default.conf
   else
     log "INFO" "[$SERVICE_NAME] 使用普通部署模式"
-    cp ./"$SERVICE_NAME"/conf.d/default.conf "$COMPOSE_DIR"/conf.d
+    selected_conf=default.conf
+    inactive_conf=default-blue-green.conf
   fi
+  # 两套模板包含同名 upstream，只允许当前模式的托管配置参与加载。
+  if [[ -f "$COMPOSE_DIR/conf.d/$inactive_conf" ]]; then
+    mv "$COMPOSE_DIR/conf.d/$inactive_conf" "$COMPOSE_DIR/conf.d/$inactive_conf.disabled.$(date +%Y%m%d%H%M%S).$$"
+  fi
+  cp ./"$SERVICE_NAME"/conf.d/"$selected_conf" "$COMPOSE_DIR"/conf.d
 
   cd "$COMPOSE_DIR" && docker compose up -d
+  docker compose exec -T sz-admin nginx -t
+  docker compose exec -T sz-admin nginx -s reload
   log "INFO" "[$SERVICE_NAME] 初始化完成"
   cd "$CURRENT_DIR"
 }

@@ -1,0 +1,42 @@
+services:
+  rustfs:
+    image: ${RUSTFS_IMAGE:-rustfs/rustfs:latest}
+    container_name: rustfs
+    restart: always
+    ports:
+      - "9000:9000"   # S3 API端口
+      - "9001:9001"   # 控制台端口
+    environment:
+      RUSTFS_VOLUMES: /data
+      # 官方建议 Access_Key 尽量只使用大写和数字
+      RUSTFS_ACCESS_KEY: ${OSS_ACCESS_KEY:-SZADMIN}
+      RUSTFS_SECRET_KEY: ${OSS_SECRET_KEY:-Sz2026@123456}
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+      # 与后端 S3 签名 region 保持一致
+      RUSTFS_REGION: ${OSS_REGION:-us-east-1}
+      # 虚拟主机根域名，多个值使用逗号分隔；PATH 模式可留空
+      # 空值必须省略：RustFS 1.0.1 会拒绝显式空字符串。
+      # 非空时由运行目录 .env 的同名变量提供。
+      RUSTFS_SERVER_DOMAINS:
+      # 日志相关
+      RUSTFS_OBS_LOGGER_LEVEL: "info"
+      # 日志路径
+      RUSTFS_OBS_LOG_DIRECTORY: "/var/log/rustfs/"
+    volumes:
+      - ./data:/data:Z
+      - ./logs:/var/log/rustfs:Z
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/health/ready >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 10s
+    networks:
+      - sz-network
+
+networks:
+  sz-network:
+    external: true
+    name: ${DOCKER_NETWORK_NAME:-sz-network}

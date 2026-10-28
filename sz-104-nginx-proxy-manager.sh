@@ -32,7 +32,7 @@ npm_init() {
   mkdir -p "${COMPOSE_DIR}"
   cp ./nginx-proxy-manager-zh/docker-compose.yml "${COMPOSE_DIR}"
   cp ./nginx-proxy-manager-zh/upgrade.sh "${COMPOSE_DIR}"
-  write_runtime_env "${COMPOSE_DIR}"
+  write_runtime_env "${COMPOSE_DIR}" npm
 
   cd "${COMPOSE_DIR}" && docker compose up -d
   log "INFO" "nginx-proxy-manager-zh 初始化完成"

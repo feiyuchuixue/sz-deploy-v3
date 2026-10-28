@@ -46,8 +46,9 @@ main() {
   echo "Nginx Proxy Manager 初始配置地址: http://<服务器IP>:81"
   echo "  默认账号/密码: admin@example.com / changeme"
   echo "------------------------------------------------------------"
-  echo "Minio 初始配置地址: http://<服务器IP>:9000"
-  echo "  默认账号/密码: szadmin / Sz2025@123456"
+  echo "${OSS_PROVIDER} 控制台地址: http://<服务器IP>:9001"
+  echo "  账号与密码：使用安装配置中的 OSS_ACCESS_KEY / OSS_SECRET_KEY"
+  echo "  应用 endpoint、bucket、domain 和资源场景请在 config/<profile>/oss.yml 中配置。"
   echo "============================================================"
 
 }

@@ -8,9 +8,6 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod}
       - DB_TYPE=${DB_TYPE:-mysql}
-      - PAGE_HELPER_DIALECT=${PAGE_HELPER_DIALECT:-mysql}
-      - PG_INTERNAL_USER=${PG_INTERNAL_USER:-sz_admin_prod_user_in}
-      - PG_INTERNAL_PASSWORD=${PG_INTERNAL_PASSWORD:-ChangeMe_Strong_In_Password}
     volumes:
       - ./logs:/logs
       - ./config:/config

@@ -47,7 +47,7 @@ main() {
     bash ./sz-4-mysql.sh
   fi
 
-  bash ./sz-5-minio.sh
+  bash ./sz-5-oss.sh
   log "INFO" "**********所有基础服务安装完成**********"
 }
 

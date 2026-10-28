@@ -31,10 +31,10 @@ CURRENT_DIR=$(pwd)   # 记录当前路径
 DB_TYPE=${DB_TYPE:-mysql}
 
 # MySQL 配置参数
-CONTAINER_NAME="mysql8"       # MySQL容器名称
-DB_NAME="sz_admin_prod"       # 要创建的数据库名
+CONTAINER_NAME="${MYSQL_CONTAINER:-mysql8}"       # MySQL容器名称
+DB_NAME="${MYSQL_DATABASE:-sz_admin_prod}"        # 要创建的数据库名
 DB_USER="root"
-DB_PASSWORD="Sz2025@123456"  # 含特殊字符
+DB_PASSWORD="${MYSQL_PASSWORD:-Sz2025@123456}"   # root 密码
 CHARSET="utf8mb4"             # 字符集
 COLLATE="utf8mb4_general_ci"  # 排序规则
 
@@ -62,7 +62,11 @@ check_mysql_connection() {
 
     while [ $retry -lt $MAX_RETRIES ]; do
         # 尝试连接并执行简单查询
-        if docker exec -i "$CONTAINER_NAME" sh -c "mysql -u'$DB_USER' -p'$DB_PASSWORD' -e \"SELECT 1\" >/dev/null 2>&1"; then
+        # 官方 MySQL 镜像初始化期间会短暂启动仅开放 Unix socket 的临时实例。
+        # 强制走容器内 TCP，避免把临时实例误判为最终服务已就绪。
+        if docker exec -e MYSQL_PWD="$DB_PASSWORD" "$CONTAINER_NAME" \
+            mysql --protocol=TCP -h127.0.0.1 -P3306 -u"$DB_USER" \
+            -e "SELECT 1" >/dev/null 2>&1; then
             log "INFO" "✅ MySQL 连接成功"
             return 0  # 连接成功，退出函数
         fi
@@ -103,13 +107,13 @@ check_pg_connection() {
 # 创建数据库
 create_database() {
     log "INFO" "开始创建数据库 $DB_NAME..."
-    if docker exec -i "$CONTAINER_NAME" sh -c "
-        mysql -u'$DB_USER' -p'$DB_PASSWORD' <<EOF
-        CREATE DATABASE IF NOT EXISTS $DB_NAME
-            CHARACTER SET $CHARSET
-            COLLATE $COLLATE;
-EOF
-"; then
+    if [[ ! "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
+        log "INFO" "❌ 错误：MySQL 数据库名只允许字母、数字和下划线"
+        return 1
+    fi
+    if docker exec -e MYSQL_PWD="$DB_PASSWORD" "$CONTAINER_NAME" \
+        mysql --protocol=TCP -h127.0.0.1 -P3306 -u"$DB_USER" \
+        -e "CREATE DATABASE IF NOT EXISTS \`$DB_NAME\` CHARACTER SET $CHARSET COLLATE $COLLATE;"; then
         log "INFO" "✅ 数据库 $DB_NAME 创建成功（或已存在）"
     else
         log "INFO" "❌ 错误：数据库 $DB_NAME 创建失败"
@@ -147,6 +151,10 @@ service_init() {
   mkdir -p "$COMPOSE_DIR"/config/prod
   mkdir -p "$RESOURCE_DATA_DIR"
   cp ./"$SERVICE_NAME"/config/* "$COMPOSE_DIR"/config/prod
+  if [[ -n "${RESOURCE_CONFIG_FILE:-}" ]]; then
+    [[ -f "$RESOURCE_CONFIG_FILE" ]] || { echo "资源配置文件不存在：$RESOURCE_CONFIG_FILE" >&2; return 1; }
+    cp "$RESOURCE_CONFIG_FILE" "$COMPOSE_DIR/config/prod/oss.yml"
+  fi
   if [[ "${USE_BLUE_GREEN_DEPLOY:-false}" == "true" ]]; then
     log "INFO" "[$SERVICE_NAME] 使用蓝绿部署模式"
     mkdir -p "$COMPOSE_DIR"/nginx
@@ -161,9 +169,6 @@ service_init() {
     upsert_env_value "$COMPOSE_DIR/.env" "SPRING_ACTIVE" "$SPRING_PROFILES_ACTIVE"
     upsert_env_value "$COMPOSE_DIR/.env" "NETWORK_NAME" "$DOCKER_NETWORK_NAME"
     upsert_env_value "$COMPOSE_DIR/.env" "RESOURCE_DATA_DIR" "$RESOURCE_DATA_DIR"
-    upsert_env_value "$COMPOSE_DIR/.env" "PAGE_HELPER_DIALECT" "$PAGE_HELPER_DIALECT"
-    upsert_env_value "$COMPOSE_DIR/.env" "PG_INTERNAL_USER" "${PG_INTERNAL_USER:-sz_admin_prod_user_in}"
-    upsert_env_value "$COMPOSE_DIR/.env" "PG_INTERNAL_PASSWORD" "${PG_INTERNAL_PASSWORD:-ChangeMe_Strong_In_Password}"
     upsert_env_value "$COMPOSE_DIR/.env" "IMAGE_PULL" "$IMAGE_PULL"
     upsert_env_value "$COMPOSE_DIR/.env" "PRUNE_IMAGES" "$PRUNE_IMAGES"
     upsert_env_value "$COMPOSE_DIR/.env" "PKG_MGR" "$PKG_MGR"
@@ -180,7 +185,7 @@ service_init() {
     log "INFO" "[$SERVICE_NAME] 使用普通部署模式"
     cp ./"$SERVICE_NAME"/docker-compose.yml "$COMPOSE_DIR"
     cp ./"$SERVICE_NAME"/upgrade.sh "$COMPOSE_DIR"
-    write_runtime_env "$COMPOSE_DIR"
+    write_runtime_env "$COMPOSE_DIR" admin
     chmod +x "$COMPOSE_DIR"/upgrade.sh
     cd "$COMPOSE_DIR" && docker compose up -d
   fi

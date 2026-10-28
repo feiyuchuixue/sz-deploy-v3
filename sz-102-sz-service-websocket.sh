@@ -39,7 +39,7 @@ service_init() {
   mkdir -p "$COMPOSE_DIR"/config/prod
   cp ./"$SERVICE_NAME"/docker-compose.yml "$COMPOSE_DIR"
   cp ./"$SERVICE_NAME"/upgrade.sh "$COMPOSE_DIR"
-  write_runtime_env "$COMPOSE_DIR"
+  write_runtime_env "$COMPOSE_DIR" websocket
   chmod +x "$COMPOSE_DIR"/upgrade.sh
   cd "$COMPOSE_DIR" && docker compose up -d
   log "INFO" "[$SERVICE_NAME] 初始化完成"

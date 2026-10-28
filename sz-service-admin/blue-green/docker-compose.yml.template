@@ -19,9 +19,6 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=${SPRING_ACTIVE}
       - DB_TYPE=${DB_TYPE}
-      - PAGE_HELPER_DIALECT=${PAGE_HELPER_DIALECT}
-      - PG_INTERNAL_USER=${PG_INTERNAL_USER}
-      - PG_INTERNAL_PASSWORD=${PG_INTERNAL_PASSWORD}
     volumes:
       - ./logs:/logs
       - ./config:/config
@@ -42,9 +39,6 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=${SPRING_ACTIVE}
       - DB_TYPE=${DB_TYPE}
-      - PAGE_HELPER_DIALECT=${PAGE_HELPER_DIALECT}
-      - PG_INTERNAL_USER=${PG_INTERNAL_USER}
-      - PG_INTERNAL_PASSWORD=${PG_INTERNAL_PASSWORD}
     volumes:
       - ./logs:/logs
       - ./config:/config

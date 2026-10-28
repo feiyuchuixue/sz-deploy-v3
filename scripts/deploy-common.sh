@@ -9,13 +9,22 @@ load_env_file() {
     # shellcheck disable=SC1090
     . "$env_file"
     set +a
-    DEPLOY_ENV_FILE="$env_file"
+    DEPLOY_ENV_FILE="$(cd "$(dirname "$env_file")" && pwd)/$(basename "$env_file")"
+    export DEPLOY_ENV_FILE
   fi
 }
 
 load_deploy_env() {
-  DEPLOY_ENV_FILE="${DEPLOY_ENV_FILE:-}"
-  if [ -f ../.env ]; then
+  if [ -n "${ENV_FILE:-${DEPLOY_ENV_FILE:-}}" ]; then
+    local selected_env="${ENV_FILE:-$DEPLOY_ENV_FILE}"
+    if [ ! -f "$selected_env" ]; then
+      echo "指定的环境文件不存在：$selected_env" >&2
+      return 1
+    fi
+    load_env_file "$selected_env"
+    ENV_FILE="$DEPLOY_ENV_FILE"
+    export ENV_FILE
+  elif [ -f ../.env ]; then
     load_env_file ../.env
   elif [ -f .env ]; then
     load_env_file .env
@@ -59,19 +68,46 @@ load_deploy_env() {
   PRUNE_IMAGES="${PRUNE_IMAGES:-false}"
 
   RESOURCE_DATA_DIR="${RESOURCE_DATA_DIR:-/home/data/sz-resource}"
+  OSS_PROVIDER="${OSS_PROVIDER:-MINIO}"
+  OSS_PROVIDER="${OSS_PROVIDER^^}"
+  OSS_ACCESS_KEY="${OSS_ACCESS_KEY:-SZADMIN}"
+  OSS_SECRET_KEY="${OSS_SECRET_KEY:-Sz2025@123456}"
+  OSS_REGION="${OSS_REGION:-us-east-1}"
+  OSS_SERVER_DOMAINS="${OSS_SERVER_DOMAINS:-}"
+  # Compose 使用可省略的同名环境键，PATH 模式不传空字符串给 RustFS CLI。
+  unset RUSTFS_SERVER_DOMAINS
+  if [[ -n "$OSS_SERVER_DOMAINS" ]]; then
+    export RUSTFS_SERVER_DOMAINS="$OSS_SERVER_DOMAINS"
+  fi
+  case "$OSS_PROVIDER" in
+    MINIO)
+      OSS_SERVICE_DIR="minio"
+      ;;
+    RUSTFS)
+      OSS_SERVICE_DIR="rustFS"
+      ;;
+    *)
+      echo "不支持的 OSS_PROVIDER: ${OSS_PROVIDER}，可选值：MINIO/RUSTFS" >&2
+      exit 1
+      ;;
+  esac
+  if [[ -n "$OSS_SERVER_DOMAINS" && "$OSS_SERVER_DOMAINS" == *"://"* ]]; then
+    echo "OSS_SERVER_DOMAINS 只能填写域名和可选端口，不能包含协议" >&2
+    exit 1
+  fi
   BACKUP_ENABLED="${BACKUP_ENABLED:-true}"
   BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-90}"
   MYSQL_BACKUP_ROOT="${MYSQL_BACKUP_ROOT:-/home/data/mysql_backups}"
   POSTGRES_BACKUP_ROOT="${POSTGRES_BACKUP_ROOT:-/home/data/postgres_backups}"
   MYSQL_DATABASE="${MYSQL_DATABASE:-sz_admin_prod}"
   MYSQL_CONTAINER="${MYSQL_CONTAINER:-mysql8}"
-  MYSQL_USER="${MYSQL_USER:-root}"
   MYSQL_PASSWORD="${MYSQL_PASSWORD:-Sz2025@123456}"
 
   NGINX_IMAGE="${NGINX_IMAGE:-nginx:1.27.3}"
   MYSQL_IMAGE="${MYSQL_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/mysql:latest}"
   REDIS_IMAGE="${REDIS_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/redis:latest}"
   MINIO_IMAGE="${MINIO_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/minio:latest}"
+  RUSTFS_IMAGE="${RUSTFS_IMAGE:-rustfs/rustfs:latest}"
   NPM_IMAGE="${NPM_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/nginx-proxy-manager-zh:latest}"
 
   SZ_SERVICE_ADMIN_IMAGE_MYSQL="${SZ_SERVICE_ADMIN_IMAGE_MYSQL:-$(image_ref sz-service-admin "${ADMIN_MYSQL_IMAGE_TAG}")}"
@@ -84,8 +120,9 @@ load_deploy_env() {
   export IMAGE_MODE IMAGE_REGISTRY IMAGE_NAMESPACE IMAGE_TAG IMAGE_PULL PRUNE_IMAGES
   export ADMIN_MYSQL_IMAGE_TAG ADMIN_POSTGRESQL_IMAGE_TAG
   export RESOURCE_DATA_DIR BACKUP_ENABLED BACKUP_RETENTION_DAYS MYSQL_BACKUP_ROOT POSTGRES_BACKUP_ROOT
-  export MYSQL_DATABASE MYSQL_CONTAINER MYSQL_USER MYSQL_PASSWORD
-  export NGINX_IMAGE MYSQL_IMAGE REDIS_IMAGE MINIO_IMAGE NPM_IMAGE
+  export OSS_PROVIDER OSS_SERVICE_DIR OSS_ACCESS_KEY OSS_SECRET_KEY OSS_REGION OSS_SERVER_DOMAINS
+  export MYSQL_DATABASE MYSQL_CONTAINER MYSQL_PASSWORD
+  export NGINX_IMAGE MYSQL_IMAGE REDIS_IMAGE MINIO_IMAGE RUSTFS_IMAGE NPM_IMAGE
   export SZ_SERVICE_ADMIN_IMAGE_MYSQL SZ_SERVICE_ADMIN_IMAGE_POSTGRESQL SZ_SERVICE_ADMIN_IMAGE
   export SZ_SERVICE_WEBSOCKET_IMAGE SZ_ADMIN_IMAGE
 }
@@ -109,61 +146,133 @@ resolve_admin_image() {
   case "${DB_TYPE:-mysql}" in
     mysql)
       SZ_SERVICE_ADMIN_IMAGE="${SZ_SERVICE_ADMIN_IMAGE_MYSQL}"
-      PAGE_HELPER_DIALECT="${PAGE_HELPER_DIALECT:-mysql}"
       ;;
     postgresql)
       SZ_SERVICE_ADMIN_IMAGE="${SZ_SERVICE_ADMIN_IMAGE_POSTGRESQL}"
-      PAGE_HELPER_DIALECT="${PAGE_HELPER_DIALECT:-postgresql}"
       ;;
     *)
       echo "不支持的 DB_TYPE: ${DB_TYPE}，可选值：mysql/postgresql" >&2
       exit 1
       ;;
   esac
-  export SZ_SERVICE_ADMIN_IMAGE PAGE_HELPER_DIALECT
+  export SZ_SERVICE_ADMIN_IMAGE
+}
+
+validate_compose_shell_literal() {
+  local key="$1"
+  local value="$2"
+
+  if [[ "$value" == *$'\n'* || "$value" == *"'"* ]]; then
+    echo "${key} 包含 .env 无法同时供 Docker Compose 与 Bash source 安全解析的字符" >&2
+    return 1
+  fi
+}
+
+write_compose_shell_literal() {
+  local key="$1"
+  local value="$2"
+
+  validate_compose_shell_literal "$key" "$value" || return 1
+  printf "%s='%s'\n" "$key" "$value"
 }
 
 write_runtime_env() {
   local target_dir="$1"
-  mkdir -p "$target_dir"
-  resolve_admin_image
+  local runtime_scope="${2:-}"
+  local env_file="${target_dir}/.env"
+  local temp_file
 
-  {
-    printf 'DB_TYPE=%s\n' "$DB_TYPE"
+  case "$runtime_scope" in
+    redis|mysql|storage|admin|websocket|frontend|static|npm)
+      ;;
+    *)
+      echo "不支持的运行时配置作用域: ${runtime_scope:-<empty>}，可选值：redis/mysql/storage/admin/websocket/frontend/static/npm" >&2
+      return 1
+      ;;
+  esac
+
+  if [[ "$runtime_scope" == "admin" ]]; then
+    resolve_admin_image
+  fi
+  case "$runtime_scope" in
+    mysql)
+      validate_compose_shell_literal 'MYSQL_PASSWORD' "$MYSQL_PASSWORD" || return 1
+      ;;
+    storage)
+      validate_compose_shell_literal 'OSS_ACCESS_KEY' "$OSS_ACCESS_KEY" || return 1
+      validate_compose_shell_literal 'OSS_SECRET_KEY' "$OSS_SECRET_KEY" || return 1
+      ;;
+  esac
+
+  mkdir -p "$target_dir" || return 1
+  temp_file=$(mktemp "${target_dir}/.env.tmp.XXXXXX") || return 1
+
+  if ! (
+    set -e
     printf 'DOCKER_NETWORK_NAME=%s\n' "$DOCKER_NETWORK_NAME"
-    printf 'USE_BLUE_GREEN_DEPLOY=%s\n' "$USE_BLUE_GREEN_DEPLOY"
-    printf 'SPRING_PROFILES_ACTIVE=%s\n' "$SPRING_PROFILES_ACTIVE"
-    printf 'PAGE_HELPER_DIALECT=%s\n' "$PAGE_HELPER_DIALECT"
-    printf 'RESOURCE_DATA_DIR=%s\n' "$RESOURCE_DATA_DIR"
-    printf 'BACKUP_ENABLED=%s\n' "$BACKUP_ENABLED"
-    printf 'BACKUP_RETENTION_DAYS=%s\n' "$BACKUP_RETENTION_DAYS"
-    printf 'MYSQL_BACKUP_ROOT=%s\n' "$MYSQL_BACKUP_ROOT"
-    printf 'MYSQL_DATABASE=%s\n' "$MYSQL_DATABASE"
-    printf 'MYSQL_CONTAINER=%s\n' "$MYSQL_CONTAINER"
-    printf 'MYSQL_USER=%s\n' "$MYSQL_USER"
-    printf 'MYSQL_PASSWORD=%s\n' "$MYSQL_PASSWORD"
-    printf 'POSTGRES_BACKUP_ROOT=%s\n' "$POSTGRES_BACKUP_ROOT"
-    printf 'IMAGE_MODE=%s\n' "$IMAGE_MODE"
-    printf 'IMAGE_REGISTRY=%s\n' "$IMAGE_REGISTRY"
-    printf 'IMAGE_NAMESPACE=%s\n' "$IMAGE_NAMESPACE"
-    printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG"
-    printf 'ADMIN_MYSQL_IMAGE_TAG=%s\n' "$ADMIN_MYSQL_IMAGE_TAG"
-    printf 'ADMIN_POSTGRESQL_IMAGE_TAG=%s\n' "$ADMIN_POSTGRESQL_IMAGE_TAG"
     printf 'IMAGE_PULL=%s\n' "$IMAGE_PULL"
     printf 'PRUNE_IMAGES=%s\n' "$PRUNE_IMAGES"
-    printf 'SZ_SERVICE_ADMIN_IMAGE=%s\n' "$SZ_SERVICE_ADMIN_IMAGE"
-    printf 'SZ_SERVICE_ADMIN_IMAGE_MYSQL=%s\n' "$SZ_SERVICE_ADMIN_IMAGE_MYSQL"
-    printf 'SZ_SERVICE_ADMIN_IMAGE_POSTGRESQL=%s\n' "$SZ_SERVICE_ADMIN_IMAGE_POSTGRESQL"
-    printf 'SZ_SERVICE_WEBSOCKET_IMAGE=%s\n' "$SZ_SERVICE_WEBSOCKET_IMAGE"
-    printf 'SZ_ADMIN_IMAGE=%s\n' "$SZ_ADMIN_IMAGE"
-    printf 'NGINX_IMAGE=%s\n' "$NGINX_IMAGE"
-    printf 'MYSQL_IMAGE=%s\n' "$MYSQL_IMAGE"
-    printf 'REDIS_IMAGE=%s\n' "$REDIS_IMAGE"
-    printf 'MINIO_IMAGE=%s\n' "$MINIO_IMAGE"
-    printf 'NPM_IMAGE=%s\n' "$NPM_IMAGE"
-    printf 'PG_INTERNAL_USER=%s\n' "${PG_INTERNAL_USER:-sz_admin_prod_user_in}"
-    printf 'PG_INTERNAL_PASSWORD=%s\n' "${PG_INTERNAL_PASSWORD:-ChangeMe_Strong_In_Password}"
-  } > "${target_dir}/.env"
+    case "$runtime_scope" in
+      redis)
+        printf 'REDIS_IMAGE=%s\n' "$REDIS_IMAGE"
+        ;;
+      mysql)
+        printf 'MYSQL_IMAGE=%s\n' "$MYSQL_IMAGE"
+        printf 'MYSQL_DATABASE=%s\n' "$MYSQL_DATABASE"
+        printf 'MYSQL_CONTAINER=%s\n' "$MYSQL_CONTAINER"
+        write_compose_shell_literal 'MYSQL_PASSWORD' "$MYSQL_PASSWORD"
+        printf 'BACKUP_ENABLED=%s\n' "$BACKUP_ENABLED"
+        printf 'BACKUP_RETENTION_DAYS=%s\n' "$BACKUP_RETENTION_DAYS"
+        printf 'MYSQL_BACKUP_ROOT=%s\n' "$MYSQL_BACKUP_ROOT"
+        ;;
+      storage)
+        printf 'OSS_PROVIDER=%s\n' "$OSS_PROVIDER"
+        write_compose_shell_literal 'OSS_ACCESS_KEY' "$OSS_ACCESS_KEY"
+        write_compose_shell_literal 'OSS_SECRET_KEY' "$OSS_SECRET_KEY"
+        printf 'OSS_REGION=%s\n' "$OSS_REGION"
+        write_compose_shell_literal 'OSS_SERVER_DOMAINS' "$OSS_SERVER_DOMAINS"
+        if [[ -n "$OSS_SERVER_DOMAINS" ]]; then
+          write_compose_shell_literal 'RUSTFS_SERVER_DOMAINS' "$OSS_SERVER_DOMAINS"
+        fi
+        printf 'MINIO_IMAGE=%s\n' "$MINIO_IMAGE"
+        printf 'RUSTFS_IMAGE=%s\n' "$RUSTFS_IMAGE"
+        ;;
+      admin)
+        printf 'DB_TYPE=%s\n' "$DB_TYPE"
+        printf 'SPRING_PROFILES_ACTIVE=%s\n' "$SPRING_PROFILES_ACTIVE"
+        printf 'RESOURCE_DATA_DIR=%s\n' "$RESOURCE_DATA_DIR"
+        printf 'SZ_SERVICE_ADMIN_IMAGE=%s\n' "$SZ_SERVICE_ADMIN_IMAGE"
+        ;;
+      websocket)
+        printf 'SPRING_PROFILES_ACTIVE=%s\n' "$SPRING_PROFILES_ACTIVE"
+        printf 'SZ_SERVICE_WEBSOCKET_IMAGE=%s\n' "$SZ_SERVICE_WEBSOCKET_IMAGE"
+        ;;
+      frontend)
+        printf 'SZ_ADMIN_IMAGE=%s\n' "$SZ_ADMIN_IMAGE"
+        ;;
+      static)
+        printf 'NGINX_IMAGE=%s\n' "$NGINX_IMAGE"
+        printf 'RESOURCE_DATA_DIR=%s\n' "$RESOURCE_DATA_DIR"
+        ;;
+      npm)
+        printf 'NPM_IMAGE=%s\n' "$NPM_IMAGE"
+        ;;
+    esac
+  ) > "$temp_file"; then
+    rm -f "$temp_file"
+    return 1
+  fi
+
+  if [ -f "$env_file" ]; then
+    if ! chmod --reference="$env_file" "$temp_file"; then
+      rm -f "$temp_file"
+      return 1
+    fi
+  fi
+  if ! mv "$temp_file" "$env_file"; then
+    rm -f "$temp_file"
+    return 1
+  fi
 }
 
 compose_pull_if_needed() {
@@ -186,11 +295,26 @@ upsert_env_value() {
   local env_file="$1"
   local key="$2"
   local value="$3"
+  local escaped_value
+  local temp_file="${env_file}.tmp.$$"
+  local replaced=false
 
   touch "$env_file"
-  if grep -q "^${key}=" "$env_file"; then
-    sed -i "s|^${key}=.*|${key}=${value}|" "$env_file"
-  else
-    printf '%s=%s\n' "$key" "$value" >> "$env_file"
+  validate_compose_shell_literal "$key" "$value" || return 1
+  escaped_value="'$value'"
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [[ "$line" == "$key="* ]]; then
+      printf '%s=%s\n' "$key" "$escaped_value"
+      replaced=true
+    else
+      printf '%s\n' "$line"
+    fi
+  done < "$env_file" > "$temp_file"
+
+  if [ "$replaced" = "false" ]; then
+    printf '%s=%s\n' "$key" "$escaped_value" >> "$temp_file"
   fi
+  chmod --reference="$env_file" "$temp_file"
+  mv "$temp_file" "$env_file"
 }

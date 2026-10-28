@@ -38,7 +38,7 @@ service_init() {
   cp ./"$SERVICE_NAME"/docker-compose.yml "$COMPOSE_DIR"
   cp ./"$SERVICE_NAME"/upgrade.sh "$COMPOSE_DIR"
   cp ./"$SERVICE_NAME"/conf.d/default.conf "$COMPOSE_DIR"/conf.d
-  write_runtime_env "$COMPOSE_DIR"
+  write_runtime_env "$COMPOSE_DIR" static
   chmod +x "$COMPOSE_DIR"/upgrade.sh
 
   log "INFO" "[$SERVICE_NAME] 启动 docker compose"

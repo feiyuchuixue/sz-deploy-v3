@@ -34,7 +34,7 @@ mysql_init() {
   cp ./mysql/docker-compose.yml "${COMPOSE_DIR}"
   cp ./mysql/backup.sh "${COMPOSE_DIR}"
   cp ./mysql/upgrade.sh "${COMPOSE_DIR}"
-  write_runtime_env "${COMPOSE_DIR}"
+  write_runtime_env "${COMPOSE_DIR}" mysql
 
   cd "${COMPOSE_DIR}" && docker compose up -d
 

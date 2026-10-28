@@ -15,7 +15,6 @@ fi
 # === 配置项 ===
 BACKUP_ROOT="${MYSQL_BACKUP_ROOT:-/home/data/mysql_backups}"
 MYSQL_CONTAINER="${MYSQL_CONTAINER:-mysql8}"
-MYSQL_USER="${MYSQL_USER:-root}"
 MYSQL_PASSWORD="${MYSQL_PASSWORD:-Sz2025@123456}"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-90}"
 
@@ -30,8 +29,8 @@ mkdir -p "$TODAY_DIR"
 
 # === 执行备份 ===
 echo "[`date`] Starting backup to $BACKUP_FILE"
-docker exec $MYSQL_CONTAINER \
-    mysqldump -u$MYSQL_USER -p$MYSQL_PASSWORD \
+docker exec -e MYSQL_PWD="$MYSQL_PASSWORD" "$MYSQL_CONTAINER" \
+    mysqldump -uroot \
     --all-databases --single-transaction --quick --lock-tables=false \
     > "$BACKUP_FILE"
 

@@ -32,7 +32,7 @@ redis_init() {
   mkdir -p "${COMPOSE_DIR}"
   cp ./redis/docker-compose.yml "${COMPOSE_DIR}"
   cp ./redis/upgrade.sh "${COMPOSE_DIR}"
-  write_runtime_env "${COMPOSE_DIR}"
+  write_runtime_env "${COMPOSE_DIR}" redis
 
   cd "${COMPOSE_DIR}" && docker compose up -d
   log "INFO" "Redis 初始化完成"
