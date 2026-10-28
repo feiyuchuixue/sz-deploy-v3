@@ -4,6 +4,8 @@
 # 负责：创建目录 / 探测 sz-network 子网 / 渲染 pg_hba.conf / 渲染 initdb SQL
 
 set -euo pipefail
+SERVICE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$SERVICE_DIR"
 
 error_handler() {
   local exit_code=$?
@@ -136,4 +138,11 @@ envsubst '${PG_DB_NAME}${PG_INTERNAL_USER}${PG_INTERNAL_PASSWORD}${PG_EXTERNAL_U
   < ./initdb/01-init-users.sql.template > ./config/initdb/01-init-users.sql
 
 log "INFO" "initdb SQL 生成完成"
+# 官方 PostgreSQL 18 镜像以 UID/GID 999 读取这些 bind 挂载；
+# 显式设置生成物权限，不依赖调用者 umask，也不递归修改其他配置。
+chown 999:999 -- config config/initdb \
+  config/postgresql.conf config/pg_hba.conf config/initdb/01-init-users.sql
+chmod 700 -- config config/initdb
+chmod 600 -- config/postgresql.conf config/pg_hba.conf config/initdb/01-init-users.sql
+
 log "INFO" "==========setup.sh 完成=========="
