@@ -1,12 +1,12 @@
 services:
   app:
     image: ${NPM_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/nginx-proxy-manager-zh:latest}
-    container_name: nginx-proxy-manager
+    container_name: ${NPM_CONTAINER:-nginx-proxy-manager}
     restart: always
     ports:
-      - '80:80'
-      - '81:81'
-      - '443:443'
+      - '${NPM_HTTP_PORT:-80}:80'
+      - '${NPM_ADMIN_PORT:-81}:81'
+      - '${NPM_HTTPS_PORT:-443}:443'
     volumes:
       - ./data:/data
       - ./letsencrypt:/etc/letsencrypt

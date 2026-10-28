@@ -1,11 +1,11 @@
 services:
   rustfs:
     image: ${RUSTFS_IMAGE:-rustfs/rustfs:latest}
-    container_name: rustfs
+    container_name: ${RUSTFS_CONTAINER:-rustfs}
     restart: always
     ports:
-      - "9000:9000"   # S3 API端口
-      - "9001:9001"   # 控制台端口
+      - "${OSS_API_PORT:-9000}:9000"   # S3 API端口
+      - "${OSS_CONSOLE_PORT:-9001}:9001"   # 控制台端口
     environment:
       RUSTFS_VOLUMES: /data
       # 官方建议 Access_Key 尽量只使用大写和数字

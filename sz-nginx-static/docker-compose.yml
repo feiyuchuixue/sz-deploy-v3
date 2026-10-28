@@ -1,7 +1,7 @@
 services:
   nginx-static:
     image: ${NGINX_IMAGE:-nginx:1.27.3}
-    container_name: nginx-static
+    container_name: ${NGINX_STATIC_CONTAINER:-nginx-static}
     restart: always
     environment:
       - TZ=Asia/Shanghai

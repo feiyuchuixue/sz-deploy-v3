@@ -1,10 +1,10 @@
 services:
   sz-admin:
     image: ${SZ_ADMIN_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/sz-admin:latest}
-    container_name: sz-admin
+    container_name: ${SZ_ADMIN_CONTAINER:-sz-admin}
     restart: always
     ports:
-      - "9800:9800"
+      - "${SZ_ADMIN_PORT:-9800}:9800"
     environment:
       - TZ=Asia/Shanghai
     volumes:

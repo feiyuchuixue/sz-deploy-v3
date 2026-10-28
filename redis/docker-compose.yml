@@ -1,15 +1,17 @@
 services:
   redis:
     image: ${REDIS_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/redis:latest}
-    container_name: redis-server
+    container_name: ${REDIS_CONTAINER:-redis-server}
     restart: always
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - ./data:/data
     command: [ "redis-server", "--requirepass", "Sz2025@123456" ]
     networks:
-      - sz-network
+      sz-network:
+        aliases:
+          - redis-server
 networks:
   sz-network:
     external: true

@@ -1,10 +1,10 @@
 services:
   sz-service-admin:
     image: ${SZ_SERVICE_ADMIN_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/sz-service-admin:latest}
-    container_name: sz-service-admin
+    container_name: ${SZ_SERVICE_ADMIN_CONTAINER:-sz-service-admin}
     restart: always
     ports:
-      - "9991:9991"
+      - "${SZ_SERVICE_ADMIN_PORT:-9991}:9991"
     environment:
       - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod}
       - DB_TYPE=${DB_TYPE:-mysql}
