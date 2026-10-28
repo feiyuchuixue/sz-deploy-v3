@@ -9,6 +9,7 @@ services:
       - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod}
     volumes:
       - ./logs:/logs
+      - ./data:/data
       - /home/docker-compose/sz-service-admin/config:/config
     networks:
       - sz-network
