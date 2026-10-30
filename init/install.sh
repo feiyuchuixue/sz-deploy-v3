@@ -20,6 +20,14 @@ cd "$ENTRY_DIR"
 SERVICE_DIR="${SCRIPT_DIR:-sz-deploy}"
 CURRENT_DIR=$(pwd)
 PKG_MGR="${PKG_MGR:-dnf}"
+case "$PKG_MGR" in
+  dnf|apt|yum) ;;
+  *) printf '不支持的 PKG_MGR，只能选择 dnf、apt 或 yum\n' >&2; exit 1 ;;
+esac
+command -v "$PKG_MGR" >/dev/null 2>&1 || {
+  printf '找不到所选包管理器 %s，请检查安装输入和服务器环境\n' "$PKG_MGR" >&2
+  exit 1
+}
 
 log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$type] $msg"; }
 
@@ -46,7 +54,8 @@ esac
 install_software() {
   log "INFO" "安装必要的软件"
   if [ -z "${DEPLOY_SOURCE_ARCHIVE:-}" ] && ! command -v git &> /dev/null; then
-    sudo $PKG_MGR install -y git
+    if [[ "$PKG_MGR" == apt ]]; then sudo apt update; fi
+    sudo "$PKG_MGR" install -y git
   fi
   log "INFO" "必要的软件安装完成"
 }

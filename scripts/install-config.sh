@@ -4,6 +4,10 @@
 
 install_resolve_config() {
   PKG_MGR="${PKG_MGR:-dnf}"
+  case "$PKG_MGR" in
+    dnf|apt|yum) ;;
+    *) printf '不支持的 PKG_MGR，只能选择 dnf、apt 或 yum\n' >&2; return 1 ;;
+  esac
   DOCKER_NETWORK_NAME="${DOCKER_NETWORK_NAME:-sz-network}"
   COMPOSE_PROJECT_NAME_PREFIX="${COMPOSE_PROJECT_NAME_PREFIX:-}"
   unset COMPOSE_PROJECT_NAME
