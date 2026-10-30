@@ -21,6 +21,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/install-config.sh
 . "$SCRIPT_DIR/scripts/install-config.sh"
 install_require_context
+. "$SCRIPT_DIR/scripts/install-platform.sh"
+install_platform_require_manager
 cd "$SCRIPT_DIR"
 
 CURRENT_DIR=$(pwd)
@@ -31,25 +33,12 @@ install_docker() {
   # 如果未安装 Docker，则安装
   if ! command -v docker &> /dev/null; then
     log "INFO" "==========开始安装 Docker=========="
-    sudo $PKG_MGR remove docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine
-
-    if [ "$PKG_MGR" = "yum" ] || [ "$PKG_MGR" = "dnf" ]; then
-      sudo $PKG_MGR -y install dnf-plugins-core
-      sudo $PKG_MGR config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-      sudo $PKG_MGR install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    elif [ "$PKG_MGR" = "apt" ]; then
-      sudo $PKG_MGR update
-      sudo $PKG_MGR install -y ca-certificates curl gnupg lsb-release
-      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-      echo \
-        "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-        $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-      sudo $PKG_MGR update
-      sudo $PKG_MGR install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    fi
+    install_platform_prepare_docker_repository
+    sudo "$PKG_MGR" install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    sudo systemctl enable --now docker
+  else
+    log "INFO" "Docker 已安装，保留现有 Engine 和服务状态"
   fi
-  # 启动服务
-  sudo systemctl enable --now docker
 
   # 检查服务状态
   sudo systemctl status docker --no-pager || true
@@ -58,25 +47,18 @@ install_docker() {
   # 验证 Docker Compose 是否存在，如果不存在进行安装
   if docker compose version &> /dev/null; then
      log "INFO" "Docker Compose 插件已安装，版本: $(docker compose version)"
-  elif command -v docker-compose &> /dev/null; then
-     log "INFO" "Docker Compose 已安装，版本: $(docker-compose --version)"
   else
-     log "INFO" "开始安装 Docker Compose"
-     # 安装docker compose
-     curl -L "$DOCKER_COMPOSE_URL" -o docker-compose
-     sudo mv docker-compose /usr/local/bin/docker-compose
-     sudo chmod +x /usr/local/bin/docker-compose
-     # 打印版本
-     docker-compose --version
-     log "INFO" "Docker Compose 安装完成"
+     log "ERROR" "缺少可用的 docker compose 插件；请先为现有 Docker 准备插件，旧 docker-compose 命令不能替代"
+     return 1
   fi
 
   if ! command -v envsubst >/dev/null 2>&1; then
+    if [[ "$PKG_MGR" == apt ]]; then sudo apt update; fi
     sudo "$PKG_MGR" install -y gettext
   fi
 
   # 创建指定的docker 网络
-  if ! docker network ls | grep -w "$DOCKER_NETWORK_NAME" &> /dev/null; then
+  if ! docker network inspect "$DOCKER_NETWORK_NAME" >/dev/null 2>&1; then
     log "INFO" "创建 Docker 网络: $DOCKER_NETWORK_NAME"
     docker network create "$DOCKER_NETWORK_NAME"
     log "INFO" "Docker 网络 $DOCKER_NETWORK_NAME 创建完成"

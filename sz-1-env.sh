@@ -21,6 +21,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/install-config.sh
 . "$SCRIPT_DIR/scripts/install-config.sh"
 install_require_context
+. "$SCRIPT_DIR/scripts/install-platform.sh"
+install_platform_require_manager
+if ! command -v docker >/dev/null 2>&1; then
+  install_platform_resolve_repository
+fi
 cd "$SCRIPT_DIR"
 
 CURRENT_DIR=$(pwd)
@@ -29,24 +34,39 @@ log() { local type="$1"; local msg="$2"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$
 
 
 init() {
+  local chrony_unit=chronyd.service cron_package=cronie cron_unit=crond.service
+  if [[ "$PKG_MGR" == apt ]]; then
+    chrony_unit=chrony.service
+    cron_package=cron
+    cron_unit=cron.service
+    sudo apt update
+  fi
   log "INFO" "==========更新环境=========="
 
   if [[ "${FAST_DEPLOY:-false}" != "true" ]]; then
     log "INFO" "==========更新环境=========="
-    sudo $PKG_MGR upgrade -y
+    sudo "$PKG_MGR" upgrade -y
   else
     log "INFO" "快速部署模式，跳过系统升级"
   fi
 
-  log "INFO" "关闭防火墙"
-  sudo systemctl stop firewalld
-  sudo systemctl disable firewalld
-  sudo systemctl status firewalld --no-pager || true
+  if systemctl cat firewalld.service >/dev/null 2>&1; then
+    log "INFO" "关闭 firewalld"
+    sudo systemctl stop firewalld.service
+    sudo systemctl disable firewalld.service
+    sudo systemctl status firewalld.service --no-pager || true
+  else
+    log "INFO" "未安装 firewalld，跳过"
+  fi
 
   log "INFO" "同步时间开始"
   # 时区检查与同步设置
-  sudo $PKG_MGR install -y chrony
-  sudo systemctl enable --now chronyd
+  sudo "$PKG_MGR" install -y chrony
+  sudo systemctl enable --now "$chrony_unit"
+  if [[ "${BACKUP_ENABLED:-true}" == true ]]; then
+    sudo "$PKG_MGR" install -y "$cron_package"
+    sudo systemctl enable --now "$cron_unit"
+  fi
   sudo chronyc sources -v
   sudo chronyc makestep
   date
