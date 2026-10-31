@@ -1,6 +1,6 @@
 services:
   nginx-static:
-    image: ${NGINX_IMAGE:-nginx:1.27.3}
+    image: ${NGINX_IMAGE:-nginx:1.30.6}
     container_name: ${NGINX_STATIC_CONTAINER:-nginx-static}
     restart: always
     environment:

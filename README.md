@@ -84,6 +84,16 @@ RESOURCE_CONFIG_FILE=''
 | `DEPLOY_ROOT` | 默认 `/home/docker-compose`，安装后的服务文件放在这里 |
 | `DOCKER_NETWORK_NAME` | 默认 `sz-network`，所有组件共用这一个网络，通常无需修改 |
 
+上面的示例默认使用普通后台。如果希望**首次安装就使用蓝绿**，上传前将 `init/.env` 中这一行改为：
+
+~~~dotenv
+USE_BLUE_GREEN_DEPLOY=true
+~~~
+
+普通部署则保留 `USE_BLUE_GREEN_DEPLOY=false`。修改的是准备上传到服务器、与 `install.sh` 放在同一目录的那份 `.env`；两种方式都执行 `bash install.sh`，安装脚本会选择对应的后台运行文件和前端 Nginx 代理配置，无需另外安装一遍蓝绿脚本。
+
+这个开关只选择 `sz-service-admin` 的发布方式。普通与蓝绿默认都在一台服务器上运行，其他组件不会因此变成多节点集群，具体区别见[普通部署与蓝绿部署](#普通部署与蓝绿部署)。
+
 根据所选服务修改密码和库名：
 
 - **MySQL**：`MYSQL_PASSWORD`、`MYSQL_DATABASE`。
@@ -95,6 +105,14 @@ RESOURCE_CONFIG_FILE=''
 ### 3. 选择镜像
 
 使用官方镜像时，保留随包的仓库和命名空间配置。官方镜像由后端、前端源码仓库构建，部署仓库负责拉取和运行。
+
+本版独立 Nginx 统一使用安全修复版本 `nginx:1.30.6`，供静态资源服务和蓝绿内部代理使用：
+
+~~~dotenv
+NGINX_IMAGE='nginx:1.30.6'
+~~~
+
+前端 `SZ_ADMIN_IMAGE` 和 Nginx Proxy Manager 的 `NPM_IMAGE` 各自封装 Nginx，需在对应镜像中升级并核实安全修复；修改 `NGINX_IMAGE` 不会更新它们。已有部署还需修改各自运行目录的 `.env` 并重建容器，步骤见[Nginx 安全版本升级](./docs/deployment-lifecycle-upgrade.md#nginx-安全版本升级)，版本变化见[更新记录](./CHANGE.md)。
 
 二开项目改成自己的镜像仓库、命名空间和发布标签，例如：
 
@@ -402,14 +420,20 @@ bash /home/docker-compose/ops/switch-oss-environment.sh \
 
 ## 普通部署与蓝绿部署
 
-首次安装时，在 `init/.env` 中选择：
+首次安装时，在准备上传的 `init/.env` 中选择，默认值为 `false`：
 
 | 部署方式 | 参数 | 后续操作 |
 | --- | --- | --- |
-| 普通 | `USE_BLUE_GREEN_DEPLOY=false` | 直接重建后台，有短暂中断 |
-| 蓝绿 | `USE_BLUE_GREEN_DEPLOY=true` | 启动另一个槽位，健康后切流，再停止旧槽位 |
+| 普通 | `USE_BLUE_GREEN_DEPLOY=false` | 单个后台实例，升级时直接重建，有短暂中断 |
+| 蓝绿 | `USE_BLUE_GREEN_DEPLOY=true` | 平时运行一个活跃槽位；发布时启动另一个，健康后切流，再停止旧槽位 |
+
+两种方式默认都部署在同一台 Linux 服务器上。蓝绿为后台提供 `green`、`blue` 两个发布槽位，并通过同机的 `sz-service-nginx` 切换流量；不是两台服务器的容灾部署。数据库、Redis、对象存储、前端和 WebSocket 仍按原来的方式部署。
+
+蓝绿发布期间新旧后台会同时运行，服务器需要留出同时运行两个后台实例的资源。发布完成后只保留一个活跃实例，不能把它当作常驻双实例集群。
 
 安装完成后，两种方式都在 `/home/docker-compose/sz-service-admin` 下维护，应用配置位于 `config/prod/`。
+
+确认已有环境的部署方式时，查看这个运行目录：普通部署有 `docker-compose.yml`、`upgrade.sh`；蓝绿部署有 `deploy.sh`、`docker-compose.gen.yml` 和 `.deploy_state`。不要仅凭安装输入中后来修改的开关判断当前运行模式。
 
 ### 普通后台升级
 

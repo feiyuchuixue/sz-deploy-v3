@@ -26,7 +26,7 @@ docker compose --project-directory "$RUN_DIR" --env-file "$RUN_DIR/.env" -f "$RU
 
 
 echo "==================== nginx-static 升级配置 ===================="
-echo "镜像: ${NGINX_IMAGE:-nginx:1.27.3}"
+echo "镜像: ${NGINX_IMAGE:-nginx:1.30.6}"
 echo "资源目录: ${RESOURCE_DATA_DIR:-/home/data/sz-resource}"
 echo "IMAGE_PULL: ${IMAGE_PULL:-false}"
 echo "PRUNE_IMAGES: ${PRUNE_IMAGES:-false}"

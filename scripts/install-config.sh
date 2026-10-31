@@ -87,7 +87,7 @@ install_resolve_config() {
   MYSQL_PORT="${MYSQL_PORT:-3306}"
   MYSQL_PASSWORD="${MYSQL_PASSWORD:-Sz2025@123456}"
 
-  NGINX_IMAGE="${NGINX_IMAGE:-nginx:1.27.3}"
+  NGINX_IMAGE="${NGINX_IMAGE:-nginx:1.30.6}"
   MYSQL_IMAGE="${MYSQL_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/mysql:latest}"
   REDIS_IMAGE="${REDIS_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/redis:latest}"
   MINIO_IMAGE="${MINIO_IMAGE:-registry.cn-beijing.aliyuncs.com/sz-dev/minio:latest}"
